@@ -44,3 +44,13 @@ Validation: 98 Python tests passed; Chromium tests verified actual changing rota
 ## Chat keyboard update
 
 Enter submits the existing chat form through the normal validation and approval path; Shift+Enter inserts a newline. Empty/whitespace drafts, repeated Enter keydown, composition/IME Enter and already-running requests do not submit. Ctrl/Alt/Meta+Enter are left unchanged. The Send button still works and request failures retain the draft. Browser keyboard tests and the existing transcript flow passed; JavaScript syntax passed. No backend or dependency change.
+
+## Automatic browser actions
+
+web_search and open_url previously required a separate approval. They now execute automatically through the existing validated browser tools. Paid inference, file changes, app launches, saved memory, WhatsApp drafts and other sensitive tools retain their approval requirements; tool disablement and Emergency Stop are still enforced.
+
+A small anchored parser handles direct YouTube commands such as `youtube open karo sad song lagao` and `open youtube and play sad song`. It opens YouTube search/home through the real browser tool without calling a model or a paid API. It ignores supported negative commands and does not treat general questions as launch instructions. Other requests still use normal model/tool routing. The response reports the browser launch request or failure; it does not claim page loading or song playback. The tool schema/system prompt also distinguish automatic browser tools from actual pending approvals and forbid unsupported execution claims.
+
+A screenshot showing no pending actions cannot establish whether an earlier request was never queued or had expired (existing approvals expire after five minutes); user-side activity logs were unavailable. The direct YouTube path removes this ambiguity for supported commands.
+
+Validation: 117 Python tests passed, including 19 browser-action tests covering actual tool invocation with mocked browser launch, launch failure, no model/paid request, query encoding, negative/noncommand text, disabled tools, Emergency Stop, public-URL validation and retained file approvals. Existing transcript flow and JavaScript syntax checks passed. No real browser was launched on the user's PC during these tests. Use the updated source revision; main remains unmerged.

@@ -1,5 +1,6 @@
 import os
 import platform
+import re
 import shutil
 import subprocess
 import time
@@ -20,14 +21,31 @@ CATALOG = {
  'move_file': ('Move a file without overwriting', True, {'source':'string','destination':'string'}),
  'open_app': ('Open an allowlisted Windows app: notepad, calculator, paint', True, {'app':'string'}),
  'open_folder': ('Open an approved folder', True, {'path':'string'}),
- 'web_search': ('Open a web search in the default browser', True, {'query':'string'}),
- 'open_url': ('Open an HTTPS public URL in the default browser', True, {'url':'string'}),
+ 'web_search': ('Open a web search in the default browser automatically; no extra approval', False, {'query':'string'}),
+ 'open_url': ('Open an HTTPS public URL in the default browser automatically; no extra approval', False, {'url':'string'}),
  'whatsapp_draft': ('Open a WhatsApp draft; user must manually send', True, {'phone':'string','message':'string'}),
  'screenshot': ('Capture the desktop to an approved PNG path', True, {'path':'string'}),
  'reminder': ('Create a persistent reminder with an ISO timestamp including timezone', True, {'title':'string','due':'string'}),
  'save_memory': ('Save user-approved long-term memory', True, {'text':'string'}),
  'maintenance_report': ('Inspect memory pressure and disk space; never kill programs', False, {}),
 }
+
+def explicit_youtube_request(text):
+    """Recognize direct browser commands only, never infer playback or execution."""
+    if re.search(r"\b(?:mat|nahi|nahin|don't|do not)\b", text, re.I):
+        return None
+    patterns = (
+        r"(?:please\s+)?(?:youtube|you tube)\s+(?:ko\s+)?(?:open\s+(?:karo|kar do)|kholo|khol do)(?:\s+(.+?))?[.!?]?",
+        r"(?:please\s+)?open\s+youtube(?:\s+(?:and\s+)?(?:search(?: for)?|play)\s+(.+?))?[.!?]?",
+    )
+    for pattern in patterns:
+        match = re.fullmatch(pattern, text.strip(), re.I)
+        if match:
+            query = (match.group(1) or '').strip()
+            query = re.sub(r"\s+(?:lagao|laga do|chalao|chala do|play karo)$", '', query, flags=re.I).strip()
+            return {'url': 'https://www.youtube.com/' + ('results?' + urlencode({'search_query':query}) if query else '')}
+    return None
+
 
 class Tools:
     def __init__(self, store):
