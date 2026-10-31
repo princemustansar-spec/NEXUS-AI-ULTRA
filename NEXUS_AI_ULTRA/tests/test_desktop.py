@@ -113,7 +113,8 @@ def test_main_desktop_default_and_headless_alias(tmp_path,monkeypatch):
 def test_gui_design_and_voice_output_preserved():
     import hashlib
     root=Path(__file__).resolve().parent.parent
-    expected = {'index.html': '5f02dc402cb95cb001fa82b94f29864493e6948411e4a364af0a93cbfdeb6766', 'style.css': '32b7f8c8b8e0d14a2c00dd886fcceede229bea3761f76f5ead8b3b0352ca4724'}
+    # Baseline includes the requested expanded AI Chat layout.
+    expected = {'index.html': '8a3a105d1a75c07d3ffdc4f320b2c0339b6dce7dcc4ef06ee309829747053334', 'style.css': 'f819118e65e3bf2e5ad794dde5bc36ad9ab7a1a3476848e136823c0be38cdbe8'}
     for name,digest in expected.items():
         assert hashlib.sha256((root/'static'/name).read_bytes()).hexdigest()==digest
     speak=next(line for line in (root/'static/app.js').read_text(encoding='utf-8').splitlines() if line.startswith('function browserSpeak(text)'))
