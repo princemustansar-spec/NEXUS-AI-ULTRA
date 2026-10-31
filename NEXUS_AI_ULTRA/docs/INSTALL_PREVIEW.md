@@ -32,3 +32,11 @@ If you only have a portable EXE, or your folder has no run.py, do not use this c
 Installed the previously missing SpeechRecognition 3.17.0, edge-tts 7.3.1 and pygame 2.6.1 dependencies into an isolated test directory. Full Python suite: 98 passed. Node transcript/review/retry test passed; Chromium layout tests passed at 1366x768, 1920x1080, 800x600 and 390x844. Compilation and JavaScript syntax checks passed. Updated the existing exact HTML/CSS baseline to reflect the requested layout; retained the voice-output preservation check.
 
 The user's Windows installation, Windows updater/COM/WebView2, real microphone transcription quality, live cloud inference, speaker output and 4GB-device RAM were not tested remotely. No access to that PC was available.
+
+## Microphone/core visual feedback update
+
+Added live input-level feedback to the core and a measured progress meter on Voice Assistant. Calibration, listening (with dBFS), transcription, errors and microphone-off states are shown explicitly. Input-level feedback resets after capture. The microphone still opens only after an explicit Voice/Start action; transcripts still require review and Send.
+
+Added a persisted Animation control with System / On / Off modes. System respects reduced-motion preferences; explicit On restores core rotation even when the OS requests reduced motion. Off disables core animation. This addresses the code's previous blanket animation suppression under reduced-motion settings without silently overriding that preference for everyone.
+
+Validation: 98 Python tests passed; Chromium tests verified actual changing rotation matrices, OS reduced-motion behavior and explicit override persistence, start action, calibration, increasing synthetic microphone levels, the Voice Assistant meter, transcription, errors, and no automatic microphone restart after reload. Four layout sizes and the transcript flow passed. Actual user Windows microphone/speaker behavior is still unverified.

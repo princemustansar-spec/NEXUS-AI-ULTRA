@@ -114,7 +114,7 @@ def test_gui_design_and_voice_output_preserved():
     import hashlib
     root=Path(__file__).resolve().parent.parent
     # Baseline includes the requested expanded AI Chat layout.
-    expected = {'index.html': '8a3a105d1a75c07d3ffdc4f320b2c0339b6dce7dcc4ef06ee309829747053334', 'style.css': 'f819118e65e3bf2e5ad794dde5bc36ad9ab7a1a3476848e136823c0be38cdbe8'}
+    expected = {'index.html': '4e89c172f3353ca9c19f5a850cf8f9cb1411962aabc5676e3b3964981cbe8621', 'style.css': 'ddf3c78fa456258f3272f0d83785246cdf5f26a8dba939d5828a6dcec3b63041'}
     for name,digest in expected.items():
         assert hashlib.sha256((root/'static'/name).read_bytes()).hexdigest()==digest
     speak=next(line for line in (root/'static/app.js').read_text(encoding='utf-8').splitlines() if line.startswith('function browserSpeak(text)'))

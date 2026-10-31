@@ -31,7 +31,9 @@ async function api(path,body,method='POST'){const r=await fetch('/api/'+path,{me
 function result(title,value){$('#result-title').textContent=title;$('#result-content').textContent=typeof value==='string'?value:JSON.stringify(value,null,2);$('#result-dialog').showModal();}
 function field(parent,label,type='text',value=''){const wrap=node('div',undefined,'field'),lab=node('label',label),input=document.createElement(type==='textarea'?'textarea':'input');if(type!=='textarea')input.type=type;input.value=value;input.id='f-'+crypto.randomUUID();lab.htmlFor=input.id;wrap.append(lab,input);parent.append(wrap);return input;}
 function card(parent,title,text){const c=node('div',undefined,'card');c.append(node('strong',title));if(text)c.append(node('p',text));parent.append(c);return c;}
-function setCore(mode){$('.core-scene').className='core-scene '+mode;$('#core-state').textContent=mode?mode.toUpperCase():'AWAITING YOUR COMMAND';}
+function setCore(mode,label){$('.core-scene').className='core-scene '+mode;$('#core-state').textContent=label||(mode?mode.toUpperCase():'MIC OFF · PRESS VOICE');}
+function updateCoreMotion(){let preference=localStorage.getItem('core-motion')||'system';if(!['system','on','off'].includes(preference))preference='system';document.documentElement.dataset.coreMotion=preference;const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;$('#core-motion').textContent='Animation: '+(preference==='system'?(reduced?'Off (system)':'On (system)'):preference==='on'?'On':'Off');}
+
 function bytes(n){return (n/1073741824).toFixed(1)+' GB';}
 function renderMonitor(m){for(const [id,val] of [['cpu',m.cpu],['ram',m.ram_percent],['disk',m.disk_percent]]){$('#'+id).textContent=val.toFixed(0)+'%';$('#'+id+'-gauge').style.setProperty('--p',val+'%');}$('#ram-detail').textContent=bytes(m.ram_used)+' / '+bytes(m.ram_total);$('#disk-detail').textContent=bytes(m.disk_free)+' free';$('#network').textContent='↓ '+(m.download/1024).toFixed(1)+' KB/s  ↑ '+(m.upload/1024).toFixed(1)+' KB/s';$('#battery').textContent=m.battery?m.battery.percent+'% · '+(m.battery.plugged?'Plugged in':'On battery'):'Not available';$('#memory-used').textContent=m.ram_percent.toFixed(0)+'%';$('#memory-bar').style.width=m.ram_percent+'%';$('#memory-available').textContent=bytes(m.ram_available)+' available · '+bytes(m.ram_total)+' total';}
 function logs(target,rows,empty){target.replaceChildren();if(!rows.length){target.append(node('p',empty,'muted'));return;}for(const row of rows.slice(0,8)){const e=node('div',undefined,'log-row');e.append(node('i'),node('time',new Date(row.created+'Z').toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})),node('span',row.text+(row.error?' · '+row.error:'')));target.append(e);}}
@@ -52,7 +54,7 @@ else if(page==='Safety Center'){w.append(node('p','Review exact arguments before
 else if(page==='Notifications'){w.append(node('h4','Notifications'));for(const n of state.notifications){const c=card(w,n.text,n.created);c.append(button('Dismiss',async()=>{await api('records/notification/'+n.id,undefined,'DELETE');await refresh();renderPage();}));}w.append(node('h4','Activity & errors'));for(const a of state.activity)card(w,a.text,a.created+(a.error?' · '+a.error:''));}
 else if(page==='Voice Assistant'){
 w.append(node('p','Google Speech Recognition is the primary engine. Use ur-PK for Urdu speech; Roman Urdu is the output writing style. Starting Google mode sends this clip online. Offline Whisper remains available as fallback. Nothing records until you press Start.'));
-const status=node('p','Checking local voice status…','notice');status.id='voice-status';w.append(status);
+const status=node('p','Checking local voice status…','notice');status.id='voice-status';w.append(status);const meter=node('progress');meter.id='voice-level';meter.max=1;meter.value=0;meter.setAttribute('aria-label','Microphone input level');w.append(meter,node('p','Press Start microphone, wait for Listening, then speak. The meter shows measured microphone input; capture is not always on.'));
 const controls=node('div',undefined,'row');const record=button('Start microphone',toggleMic,'primary');record.id='voice-record-button';controls.append(record,button('Cancel voice',cancelVoice),button('Microphone diagnostics',()=>startVoiceJob('diagnostics',{})),button('Test input (3 seconds)',()=>startVoiceJob('test',{consent:true,device:voicePreferences.device})),button('Install offline model (~75 MB)',()=>{if(confirm('Download and verify the multilingual tiny model once (approximately 75 MB)? Recognition afterward stays offline.'))return startVoiceJob('model',{confirm_download:true});}));w.append(controls);
 const engine=node('select');engine.id='voice-engine';engine.append(new Option('Google online + offline fallback','google'),new Option('Whisper offline only','offline'));engine.value=voicePreferences.engine;engine.onchange=()=>voicePreferences.engine=engine.value;w.append(node('h4','Recognition engine — Google sends audio online'),engine);
 const locale=node('select');locale.id='voice-locale';locale.append(new Option('Match recognition language automatically','auto'));for(const value of ['en-IN','ur-PK','hi-IN','en-US','en-GB'])locale.append(new Option(value,value));locale.value=voicePreferences.locale;locale.onchange=()=>voicePreferences.locale=locale.value;w.append(node('h4','Google speech language — Urdu: ur-PK, English: en-IN'),locale);
@@ -76,6 +78,15 @@ async function speak(text){
 function renderVoiceStatus(status){
  if(!status)return;listening=['calibrating','listening'].includes(status.phase);
  const active=!['idle','done','error','cancelled'].includes(status.phase);
+ const inputActive=listening&&['capture','test'].includes(status.operation||voiceJob?.operation||'capture');
+ const db=Number.isFinite(status.level_dbfs)?status.level_dbfs:null;
+ const level=inputActive&&status.phase==='listening'&&db!==null?Math.max(0,Math.min(1,(db+60)/45)):0;
+ $('.core-scene').style.setProperty('--voice-level',String(level));const meter=$('#voice-level');if(meter){meter.value=level;meter.setAttribute('aria-valuetext',inputActive&&db!==null?Math.round(db)+' dBFS':'Microphone not capturing');}
+ $('#mic-button').setAttribute('aria-pressed',String(active));
+ $('#mic-button').classList.toggle('recording',inputActive);
+ if(active){const label=status.phase==='calibrating'?'CALIBRATING · WAIT':inputActive?'LISTENING'+(db!==null?' · '+Math.round(db)+' dBFS':''):status.phase==='transcribing'?'TRANSCRIBING':status.phase.toUpperCase();setCore(inputActive?'listening':'thinking',label);}
+ else if(!busy&&!['starting','speaking'].includes(state.tts?.phase))setCore('',status.phase==='error'?'MIC ERROR · OPEN VOICE ASSISTANT':status.phase==='done'&&status.result?.text?'TRANSCRIPT READY · REVIEW & SEND':undefined);
+
  const label=active?(listening?'Stop & transcribe':'Cancel voice'):'Start microphone';
  $('#mic-button').textContent=active?label:'♩ Voice';const record=$('#voice-record-button');if(record)record.textContent=label;
  const output=$('#voice-status');if(output){const missing=status.dependencies_missing?.length?' Missing components: '+status.dependencies_missing.join(', ')+'. Run INSTALL_VOICE.bat.':'';output.textContent=(status.error||(['done','cancelled','idle'].includes(status.phase)?'Voice: '+status.phase:status.message)||('Voice: '+status.phase))+(status.level_dbfs!==undefined?' · Input '+status.level_dbfs+' dBFS':'')+' · Offline model '+(status.model_ready?'ready':'not installed')+'.'+missing;}
@@ -87,8 +98,8 @@ async function startVoiceJob(operation,body){
 async function pollVoice(){
  if(!voiceJob)return;
  try{const status=await api('voice/status',undefined,'GET');if(!voiceJob)return;if(status.job_id!==voiceJob.id)throw Error('Voice operation changed. Run diagnostics and try again.');renderVoiceStatus(status);
- if(!['done','error','cancelled'].includes(status.phase)){setCore(listening?'listening':'thinking');voicePollTimer=setTimeout(pollVoice,350);return;}
- const operation=voiceJob.operation;voiceJob=null;listening=false;if(!busy)setCore('');
+ if(!['done','error','cancelled'].includes(status.phase)){voicePollTimer=setTimeout(pollVoice,350);return;}
+ const operation=voiceJob.operation;voiceJob=null;listening=false;
  if(status.phase==='error')throw Error(status.error||'Voice operation failed.');
  if(status.phase==='cancelled'){toast('Voice cancelled. No transcript sent.');return;}
  const data=status.result||{};await refresh();
@@ -96,7 +107,7 @@ async function pollVoice(){
  else if(operation==='diagnostics'){voiceDevices=data.devices||[];if(page==='Voice Assistant')renderPage();result('Python microphone diagnostics',data);}
  else if(operation==='test')result('Microphone input test',data);
  else{if(page==='Voice Assistant')renderPage();toast('Offline model verified and ready.');}
- }catch(e){voiceJob=null;listening=false;if(!busy)setCore('');error(e);}
+ }catch(e){voiceJob=null;listening=false;if(!busy)setCore('','VOICE ERROR · OPEN VOICE ASSISTANT');error(e);}
 }
 async function cancelVoice(){clearTimeout(voicePollTimer);await api('voice/cancel',{});voiceJob=null;listening=false;if(!busy)setCore('');await refresh();}
 async function toggleMic(){
@@ -110,6 +121,8 @@ window.nexusIcon=icon;
 for(const [name,symbol,desc] of modules){const b=button('',()=>navigate(name));b.dataset.page=name;const holder=node('span',undefined,'nav-icon');holder.append(window.nexusIcon(name));b.append(holder);const text=node('span',name);text.append(node('small',desc));b.append(text);$('#navigation').append(b);}
 for(const name of ['AI Chat','Voice Assistant','AI Tools Center','Media Studio','WhatsApp Center','RAM & System Optimizer','Tasks & Automation','Safety Center']){const m=modules.find(m=>m[0]===name),b=button('',()=>navigate(name));const symbol=node('b');symbol.append(icon(name));b.append(symbol,node('span',name.replace(' & System Optimizer','').replace('Tasks & Automation','Automation').replace('AI Tools Center','Tools')),node('small',m[2]));$('#module-tiles').append(b);}
 for(const [label,dest] of [['▤ New Chat','AI Chat'],['♩ Voice Control','Voice Assistant'],['⊞ Open Tools','AI Tools Center'],['▧ Generate Image','Media Studio'],['◎ Search Web','Browser & Web'],['▱ System Info','System Utilities']])$('#quick-actions').append(button(label,()=>navigate(dest)));
+$('#core-motion').onclick=()=>{const values=['system','on','off'];const current=document.documentElement.dataset.coreMotion||'system';localStorage.setItem('core-motion',values[(values.indexOf(current)+1)%values.length]);updateCoreMotion();};
+updateCoreMotion();window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change',updateCoreMotion);
 $('#chat-expand').onclick=()=>navigate(page==='AI Chat'?'Dashboard':'AI Chat');
 $('#settings-shortcut').onclick=()=>navigate('Settings');$('#pending-shortcut').onclick=()=>navigate('Safety Center');$('#health-report').onclick=()=>runTool('maintenance_report',{}).catch(error);$('#emergency-stop').onclick=async()=>{try{await api('safety',{stop:true});await cancelVoice();await stopSpeaking();await refresh();toast('Emergency Stop active. Pending actions cleared.');}catch(e){error(e);}};$('#close-result').onclick=()=>$('#result-dialog').close();$('#mic-button').onclick=()=>toggleMic().catch(error);$('#cancel-chat').onclick=()=>api('cancel',{}).catch(error);
 $('#chat-input').addEventListener('input',()=>{if(!$('#chat-input').value.trim()){chatInputSource='text';if($('#voice-original'))$('#voice-original').hidden=true;}});

@@ -78,3 +78,20 @@
  #dashboard.chat-focused #chat-input{height:72px;min-height:64px}
  .composer-actions{flex-wrap:wrap}
 }
+
+/* Visual feedback follows actual microphone levels; no idle audio capture. */
+#core-motion{position:absolute;top:4px;right:4px;z-index:2;padding:4px 7px;font-size:10px}
+#core-state{max-width:95%;line-height:1.6}
+.core-scene.listening .ai-core{box-shadow:0 0 calc(12px + var(--voice-level,0)*36px) #00e5d577,inset 0 0 24px #007c9a66}
+.core-scene.listening .orbit-mid{animation-duration:2s}
+#mic-button.recording{border-color:#24efad;background:#07513f;color:#caffef}
+@media(prefers-reduced-motion:no-preference){html:not([data-core-motion=off]) .core-scene.listening .ai-core{transform:scale(calc(1 + var(--voice-level,0)*.06));transition:transform .18s,box-shadow .18s}}
+html[data-core-motion=on] .orbit{animation:rotate 16s linear infinite!important}
+html[data-core-motion=on] .orbit-inner{animation-duration:24s!important;animation-direction:reverse!important}
+html[data-core-motion=on] .core-scene.thinking .orbit-mid{animation-duration:3s!important}
+html[data-core-motion=on] .core-scene.listening .orbit-mid{animation-duration:2s!important}
+html[data-core-motion=on] .core-scene.speaking .core-symbol{animation:pulse 1s infinite!important}
+html[data-core-motion=on] .core-scene.listening .ai-core{transform:scale(calc(1 + var(--voice-level,0)*.06));transition:transform .18s,box-shadow .18s}
+html[data-core-motion=off] .orbit,html[data-core-motion=off] .core-symbol{animation:none!important}
+
+#voice-level{display:block;width:min(100%,480px);height:18px;margin:12px 0;accent-color:var(--cyan)}
