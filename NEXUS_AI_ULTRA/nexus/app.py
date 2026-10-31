@@ -14,6 +14,7 @@ from .store import Store
 from .providers import Providers
 from .tools import Tools, CATALOG
 from .voice import VoiceService
+from .voice_online import recognition_locale
 
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.getenv('NEXUS_DATA_DIR', str(Path.home() / '.nexus_ai_ultra')))
@@ -96,7 +97,7 @@ def state():
                 chat=list(reversed(store.list('chat', 100))), memory=store.list('memory'), reminders=store.list('reminder'),
                 activity=store.list('activity',50), notifications=store.list('notification',50), preferred_provider=store.get('preferred_provider',''),
                 voice=voice.status(), tts=tts.status(), voice_muted=store.get('voice_muted',False),
-                voice_settings={**{'device':None,'language':'ur','seconds':8,'engine':'google','locale':'en-IN','silence_timeout':.8,'start_timeout':5},**store.get('voice_settings',{})})
+                voice_settings={**{'device':None,'language':'ur','seconds':8,'engine':'google','locale':'auto','silence_timeout':.8,'start_timeout':5},**store.get('voice_settings',{})})
 
 @app.post('/api/settings')
 async def settings(request: Request):
@@ -268,10 +269,10 @@ async def voice_start(request: Request):
     if b.get('engine') == 'google' and b.get('online_consent') is not True: raise ValueError('Consent to send this audio clip to Google is required.')
     await asyncio.to_thread(tts.cancel)
     settings = {'device':b.get('device'),'language':b.get('language','en'),'seconds':b.get('seconds',10),
-                'engine':b.get('engine','offline'),'locale':b.get('locale','en-IN'),
+                'engine':b.get('engine','offline'),'locale':recognition_locale(b.get('language','en'), b.get('locale','auto')),
                 'silence_timeout':b.get('silence_timeout'),'start_timeout':b.get('start_timeout',5)}
     result = await asyncio.to_thread(voice.start, 'capture', **settings)
-    store.set('voice_settings', settings)
+    store.set('voice_settings', {**settings, 'locale':b.get('locale','auto')})
     return result
 
 @app.post('/api/voice/diagnostics')

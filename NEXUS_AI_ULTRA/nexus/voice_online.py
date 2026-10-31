@@ -1,5 +1,14 @@
 """JARVIS V6.7-compatible Google recognizer using NEXUS's existing PCM capture."""
 
+def recognition_locale(language, locale='auto'):
+    """Match acoustic recognition to speech language, not Latin output script."""
+    if locale not in (None, '', 'auto'):
+        if locale not in ('en-IN', 'ur-PK', 'hi-IN', 'en-US', 'en-GB'):
+            raise ValueError('Unsupported recognition language locale.')
+        return locale
+    return 'ur-PK' if language == 'ur' else 'en-IN'
+
+
 def google_transcribe(audio, rate, locale, roman_output, send):
     import numpy as np
     import speech_recognition as sr
@@ -18,4 +27,4 @@ def google_transcribe(audio, rate, locale, roman_output, send):
     converted = romanize(text) if roman_output else text
     return {'text':converted,'original_text':text,'romanized':converted!=text,'offline':False,
             'engine':'google','detected_language':locale,'model':'Google Speech Recognition',
-            'notice':'Review before Send. en-IN accuracy for Roman Urdu/mixed speech must be measured on your microphone.'}
+            'notice':'Review before Send. Roman Urdu spelling is approximate; compare the original transcript. Select ur-PK for Urdu speech.'}

@@ -9,3 +9,12 @@ Changes:
 - Review-before-Send, optional speaker output, paid approval, tool approvals, capture engines and saved keys remain unchanged.
 
 Validation: 20 Python tests passed (4 new async HTTP chat tests plus 16 router tests). The Node frontend flow test passed for capture, review, failed-send retry, typed follow-up, and cleared-transcript replacement. Python compilation and JavaScript syntax checks passed. Tests inspect the real inference-bound message context with a mocked provider; actual third-party model adherence and Windows microphone/speaker hardware were not tested.
+
+
+## Urdu recognition follow-up
+
+The UI previously paired Urdu/Roman Urdu output with an en-IN Google recognition default. Automatic locale now uses ur-PK for Urdu and en-IN for English/unspecified speech; explicit saved locales remain unchanged. The app stores the automatic preference while passing a resolved locale to the worker. Users with an existing en-IN selection can choose automatic or ur-PK in Voice Assistant.
+
+Original script is retained in the response and is now shown in a collapsible, height-bounded review area beside the editable Roman Urdu transcript. Text is inserted with textContent. No dictionary rewriting or additional AI correction calls alter names, numbers or commands. Transliteration spelling remains approximate; actual microphone accuracy has not been measured.
+
+Follow-up validation: 31 Python tests passed (locale selection, chat context and router); updated Node capture/review/retry test passed including original-script visibility and hiding after Send. JavaScript syntax and Python compilation passed. No live recognizer or hardware accuracy measurement performed.
