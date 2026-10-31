@@ -40,3 +40,7 @@ Added live input-level feedback to the core and a measured progress meter on Voi
 Added a persisted Animation control with System / On / Off modes. System respects reduced-motion preferences; explicit On restores core rotation even when the OS requests reduced motion. Off disables core animation. This addresses the code's previous blanket animation suppression under reduced-motion settings without silently overriding that preference for everyone.
 
 Validation: 98 Python tests passed; Chromium tests verified actual changing rotation matrices, OS reduced-motion behavior and explicit override persistence, start action, calibration, increasing synthetic microphone levels, the Voice Assistant meter, transcription, errors, and no automatic microphone restart after reload. Four layout sizes and the transcript flow passed. Actual user Windows microphone/speaker behavior is still unverified.
+
+## Chat keyboard update
+
+Enter submits the existing chat form through the normal validation and approval path; Shift+Enter inserts a newline. Empty/whitespace drafts, repeated Enter keydown, composition/IME Enter and already-running requests do not submit. Ctrl/Alt/Meta+Enter are left unchanged. The Send button still works and request failures retain the draft. Browser keyboard tests and the existing transcript flow passed; JavaScript syntax passed. No backend or dependency change.
