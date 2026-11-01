@@ -1,0 +1,141 @@
+import asyncio
+import json
+from unittest.mock import Mock
+import pytest
+from nexus.handsfree import HandsFree
+
+class Store:
+    def __init__(self):self.records=[];self.settings={}
+    def get(self,key,default=None):return self.settings.get(key,default)
+    def add(self,kind,value):self.records.append((kind,value))
+
+class Voice:
+    def __init__(self,texts,events):self.texts=list(texts);self.events=events;self.job=0;self.phase='idle';self.cancelled=0
+    def status(self):
+        if not self.job:return {'phase':self.phase}
+        if self.text is None:return {'job_id':str(self.job),'phase':'listening'}
+        return {'job_id':str(self.job),'phase':'done','result':{'text':self.text}}
+    def start(self,operation,**options):
+        assert operation=='capture';self.job+=1;self.text=self.texts.pop(0) if self.texts else None
+        self.events.append(('capture',self.text));return {'job_id':str(self.job)}
+    def cancel(self):self.cancelled+=1;self.phase='cancelled';return {}
+
+class Speaker:
+    def __init__(self,events):self.events=events;self.job=0;self.cancelled=0;self.spoken=[]
+    def status(self):return {'phase':'done','job_id':'tts'+str(self.job),'result':{}} if self.job else {'phase':'idle'}
+    def start(self,operation,**options):
+        assert operation=='tts';self.job+=1;self.spoken.append(options['text']);self.events.append(('speak',options['text']))
+        assert options['allow_online'] is False
+        return {'job_id':'tts'+str(self.job)}
+    def cancel(self):self.cancelled+=1;return {}
+
+@pytest.fixture
+def fast(monkeypatch):
+    original=asyncio.sleep
+    async def sleep(delay):await original(0)
+    monkeypatch.setattr('nexus.handsfree.asyncio.sleep',sleep)
+
+
+def build(texts,chat,approve=None,pending=None):
+    events=[];store=Store();voice=Voice(texts,events);speaker=Speaker(events)
+    async def unused(*args):raise AssertionError('Unexpected approval')
+    return HandsFree(store,voice,speaker,chat,approve or unused,pending or (lambda:[]),lambda:False),events
+
+
+def test_conversation_autosends_then_speaks_and_stops_on_voice(fast):
+    calls=[]
+    async def chat(text,paid):calls.append((text,paid));return {'text':'Ji, aapki baat mil gai.'}
+    hf,events=build(['hello','mic band karo'],chat)
+    async def run():
+        await hf.start(True,True);await hf.task
+    asyncio.run(run())
+    assert calls==[('hello',False)] and not hf.running
+    assert events[0][0]=='speak' and events[1]==('capture','hello') and events[2][0]=='speak'
+    assert hf.voice.cancelled==1 and hf.tts.cancelled==1
+
+
+def test_actual_pending_tool_requires_spoken_confirmation(fast):
+    items=[];approved=[]
+    async def chat(text,paid):
+        items.append({'id':'one','name':'create_text','args':{'path':'C:/Docs/note.txt','text':'hi'}})
+        return {'text':'Approval required.'}
+    async def approve(ident,yes):approved.append((ident,yes));items.clear();return {'result':{'created':'note.txt'}}
+    hf,events=build(['note banao','haan','haan lekin file delete mat karo','haan approve','mic band karo'],chat,approve,lambda:list(items))
+    async def run():await hf.start(True,True);await hf.task
+    asyncio.run(run())
+    assert approved==[('one',True)]
+    prompt=next(text for kind,text in events if kind=='speak' and 'Details:' in text)
+    assert 'create_text' in prompt and 'C:/Docs/note.txt' in prompt
+    assert any('Pehle pending' in text for text in hf.tts.spoken)
+
+
+def test_paid_permission_is_for_one_turn_only(fast):
+    calls=[]
+    async def chat(text,paid):
+        calls.append((text,paid))
+        if text=='first' and not paid:raise ValueError('Provider: paid request requires your approval')
+        return {'text':'Answer'}
+    hf,events=build(['first','yes approve','second','mic band karo'],chat)
+    async def run():await hf.start(True,True);await hf.task
+    asyncio.run(run())
+    assert calls==[('first',False),('first',True),('second',False)]
+
+
+def test_denied_paid_request_never_retries(fast):
+    calls=[]
+    async def chat(text,paid):calls.append(paid);raise ValueError('paid request requires your approval')
+    hf,events=build(['question','nahi cancel','mic band karo'],chat)
+    async def run():await hf.start(True,True);await hf.task
+    asyncio.run(run());assert calls==[False]
+
+
+def test_stop_cancels_owned_audio_and_resumes_no_capture(fast):
+    async def chat(*args):raise AssertionError('No transcript')
+    hf,events=build([],chat)
+    async def run():
+        await hf.start(True,True)
+        for _ in range(20):await asyncio.sleep(0)
+        await hf.stop()
+        count=len(events)
+        for _ in range(10):await asyncio.sleep(0)
+        assert len(events)==count
+    asyncio.run(run());assert not hf.running and hf.voice.cancelled==1 and hf.tts.cancelled==1
+
+
+@pytest.mark.parametrize('consent,online',[(False,True),(True,False)])
+def test_capture_and_online_consent_required(consent,online):
+    async def chat(*args):raise AssertionError()
+    hf,events=build([],chat)
+    with pytest.raises(ValueError,match='Consent'):
+        asyncio.run(hf.start(consent,online))
+    assert not events
+
+
+def test_tts_failure_stops_mode_before_listening(fast):
+    async def chat(*args):raise AssertionError()
+    hf,events=build(['hello'],chat)
+    hf.tts.start=Mock(side_effect=ValueError('No speaker installed'))
+    async def run():await hf.start(True,True);await hf.task
+    asyncio.run(run());assert hf.phase=='error' and 'speaker' in hf.error and not any(kind=='capture' for kind,text in events)
+
+
+def test_original_urdu_confirmation_and_stop_are_not_lost_to_roman_spelling(fast):
+    async def chat(*args):return {'text':'ok'}
+    hf,events=build([],chat)
+    hf.running=True;hf.confirmation={'kind':'tool'}
+    async def job(service,job):return {'text':'han mnzwr','original_text':'ہاں منظور'}
+    hf._job=job
+    assert asyncio.run(hf._capture())=='haan approve'
+    async def stop_job(service,job):return {'text':'myk bnd krw','original_text':'مائیک بند کرو'}
+    hf._job=stop_job
+    assert asyncio.run(hf._capture())=='mic band karo'
+    hf.running=False
+
+
+def test_spoken_tool_denial_never_approves(fast):
+    items=[{'id':'one','name':'move_file','args':{'source':'C:/one','destination':'C:/two'}}];approvals=[]
+    async def chat(*args):return {'text':'ok'}
+    async def approve(ident,yes):approvals.append((ident,yes));items.clear();return {'denied':True}
+    hf,events=build(['nahi cancel','mic band karo'],chat,approve,lambda:list(items))
+    async def run():await hf.start(True,True);await hf.task
+    asyncio.run(run());assert approvals==[('one',False)]

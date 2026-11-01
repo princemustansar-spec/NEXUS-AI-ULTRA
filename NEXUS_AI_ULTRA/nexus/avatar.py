@@ -25,10 +25,11 @@ class FloatingAvatar:
                 raise ValueError('Floating avatar requires the native Windows app. Launch START_UPDATED_NEXUS.bat.')
             if self.window:
                 self.window.show()
+                if self.main:self.main.hide()
                 return {'visible':True}
             window = self.host.create_window(
-                'NEXUS Floating AI', self.url, width=310, height=370,
-                min_size=(260,310), frameless=True, transparent=True, on_top=True,
+                'NEXUS Floating AI', self.url, width=280, height=290,
+                min_size=(240,250), frameless=True, transparent=True, on_top=True,
                 resizable=False, easy_drag=True, shadow=False, js_api=None,
                 background_color='#030d18', focus=False,
             )
@@ -38,7 +39,11 @@ class FloatingAvatar:
             def closed():
                 if self.window is window:
                     self.window = None
+                    if self.main:
+                        self.main.show()
+                        self.main.restore()
             window.events.closed += closed
+            if self.main:self.main.hide()
             return {'visible':True}
 
     def close(self):

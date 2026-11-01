@@ -28,7 +28,9 @@ def report_error(message):
 def main(argv=None):
     parser = argparse.ArgumentParser(description='NEXUS native desktop application (Windows WebView2).')
     parser.add_argument('--headless', '--no-browser', dest='headless', action='store_true', help='Run only the local API for development/tests; never open a browser.')
+    parser.add_argument('--floating',action='store_true',help='Start the figure-only avatar and auto voice without showing the dashboard.')
     args = parser.parse_args(argv)
+    if args.floating and args.headless:parser.error('--floating cannot be used with --headless')
     backend = None
     try:
         data = Path(os.getenv('NEXUS_DATA_DIR', str(Path.home() / '.nexus_ai_ultra')))
@@ -43,7 +45,8 @@ def main(argv=None):
             if backend.failure:
                 raise RuntimeError('Backend failed. See desktop.log.') from backend.failure
         else:
-            run_desktop(backend, webview)
+            if args.floating:run_desktop(backend,webview,floating=True)
+            else:run_desktop(backend, webview)
         return 0
     except Exception as exc:
         report_error(str(exc))

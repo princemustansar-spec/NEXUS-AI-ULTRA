@@ -14,7 +14,7 @@ def test_avatar_is_lazy_reused_draggable_on_top_and_independently_closed():
     a=FloatingAvatar()
     with pytest.raises(ValueError,match='native Windows'):a.show()
     window=SimpleNamespace(events=SimpleNamespace(closed=Event()),destroy=Mock(),show=Mock())
-    main=SimpleNamespace(show=Mock(),restore=Mock())
+    main=SimpleNamespace(show=Mock(),restore=Mock(),hide=Mock())
     host=SimpleNamespace(create_window=Mock(return_value=window))
     a.attach(host,main,'http://127.0.0.1:8765/static/avatar.html')
     host.create_window.assert_not_called()
