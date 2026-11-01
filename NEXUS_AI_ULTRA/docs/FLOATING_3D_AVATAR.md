@@ -40,7 +40,7 @@ Validation for this follow-up: 167 Python tests passed, including native parent/
 
 ### Quiet listening and mouse movement
 
-Hold the left mouse button on the avatar itself and move it to drag the floating window. Windows uses its native caption move loop; other hosts retain the marked pywebview drag region. Hover controls remain independent buttons.
+Hold the left mouse button on the avatar itself and move it to drag the floating window. Windows follows the physical screen cursor while the left button is held, using SetWindowPos without a caption move loop; other hosts retain the marked pywebview drag region. Hover controls remain independent buttons.
 
 Auto voice listens for speech but stays silent during empty or unrecognized recordings. It sends no chat request for these clips and no longer greets or announces pending actions on startup. A sustained speech onset reduces accidental clicks being treated as speech. Actual microphone failures pause the session with a visual error instead of repeatedly speaking. Replies and action errors are spoken only after a recognized user request. Speaker failures also stop without a repeated speech attempt. Existing action and paid-request approvals still apply.
 
