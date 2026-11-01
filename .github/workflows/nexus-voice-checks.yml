@@ -37,6 +37,9 @@ jobs:
             }
             exit $code
           }
+      - name: Real WebView2 avatar mouse drag (no microphone)
+        timeout-minutes: 2
+        run: python tests/windows_avatar_mouse.py
       - name: Parse safe updater (does not install or record)
         shell: pwsh
         run: |
