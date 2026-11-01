@@ -55,3 +55,17 @@ def test_online_speaker_preference_is_saved_only_after_explicit_start(tmp_path,m
         body['allow_online_tts']=False;c.post('/api/handsfree/start',json=body)
         assert m.store.get('handsfree_online_tts') is False
     m.store.db.close()
+
+
+def test_only_explicit_true_unmute_flag_is_forwarded(tmp_path,monkeypatch):
+    monkeypatch.setenv('NEXUS_DATA_DIR',str(tmp_path))
+    import nexus.app
+    m=importlib.reload(nexus.app);start=AsyncMock(return_value={'active':True})
+    monkeypatch.setattr(m.handsfree,'start',start);monkeypatch.setattr(m.avatar,'window',object())
+    with TestClient(m.app) as c:
+        c.headers['x-nexus-token']=m.session_token
+        assert c.post('/api/handsfree/start',json={'consent':True,'online_consent':True,'unmute':True}).status_code==200
+        start.assert_awaited_with(True,True,False,unmute=True)
+        assert c.post('/api/handsfree/start',json={'consent':True,'online_consent':True,'unmute':'true'}).status_code==200
+        start.assert_awaited_with(True,True,False)
+    m.store.db.close()

@@ -84,7 +84,21 @@ def main():
                 deadline=time.monotonic()+3
                 while not main_window.native.Visible and time.monotonic()<deadline:time.sleep(.1)
                 assert main_window.native.Visible,'Open NEXUS must receive actual click and show GUI'
-                print('Real transparent WebView2 avatar: left/right drag, release, hover, Motion and Open NEXUS clicks passed',flush=True)
+                # Exercise the real mic button and backend consent/mute transition, without audio.
+                import asyncio
+                from nexus.app import handsfree,store
+                async def no_audio_session():await asyncio.sleep(3600)
+                handsfree._run=no_audio_session
+                store.set('voice_muted',True)
+                click_button('mic')
+                deadline=time.monotonic()+3
+                while not handsfree.running and time.monotonic()<deadline:time.sleep(.1)
+                assert handsfree.running and store.get('voice_muted') is False,'Explicit floating mic click must unmute and start'
+                click_button('mic')
+                deadline=time.monotonic()+3
+                while handsfree.running and time.monotonic()<deadline:time.sleep(.1)
+                assert not handsfree.running,'Second mic click must pause listening'
+                print('Real transparent WebView2 avatar: drag, release, hover, controls and explicit mic unmute/start/pause passed (no audio)',flush=True)
             except BaseException:
                 failures.append(traceback.format_exc());print(failures[-1],flush=True)
             finally:

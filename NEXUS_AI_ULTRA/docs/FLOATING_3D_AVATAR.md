@@ -49,3 +49,7 @@ Click the mic control to stop listening completely. Native Windows movement and 
 ### Windows hover and drag regression
 
 A color-keyed WinForms parent can look transparent while making its entire GPU-rendered WebView click-through. The avatar now uses DWM glass with an empty native TransparencyKey, plus a transparent WebView background. This preserves mouse input without restoring a backing rectangle. The Windows integration check opens the actual WebView2 avatar, verifies a blank corner reveals the underlying window, injects real cursor/button input, and checks left/right movement, release, hover controls, Motion and Open NEXUS. It uses temporary data and does not start the microphone or call an AI provider.
+
+### Unmute from the floating mic
+
+A deliberate click on the floating mic now explicitly clears saved voice mute and starts the hands-free session after consent, Emergency Stop and device-busy checks pass. Opening the avatar or desktop auto-start still respects saved mute. Failed starts preserve the mute setting. Click the mic again to pause. The GUI Unmute button sets an explicit unmuted value, blocks duplicate pending clicks and does not cancel a voice session on unmute. If the always-on-top avatar covers a GUI button, drag it aside first.
