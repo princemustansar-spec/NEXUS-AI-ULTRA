@@ -100,9 +100,6 @@ class HandsFree:
         if not items:return
         item=items[0]
         details=json.dumps(item['args'],ensure_ascii=False)
-        if len(details)>1100:
-            await self._say('Is action ki details lambi hain. Safety Center mein review karein. Auto voice pause kar raha hoon.')
-            self.running=False;return
         self.confirmation={'kind':'tool',**item}
         await self._say('Approval chahiye. Action: '+item['name']+'. Details: '+details+'. Karna hai to haan approve kahein, warna nahi cancel kahein.')
 

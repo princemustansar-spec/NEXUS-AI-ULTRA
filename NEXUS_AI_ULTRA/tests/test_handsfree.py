@@ -139,3 +139,17 @@ def test_spoken_tool_denial_never_approves(fast):
     hf,events=build(['nahi cancel','mic band karo'],chat,approve,lambda:list(items))
     async def run():await hf.start(True,True);await hf.task
     asyncio.run(run());assert approvals==[('one',False)]
+
+
+def test_long_approval_details_are_spoken_in_chunks_without_opening_gui(fast):
+    text='approved content '*180
+    items=[{'id':'long','name':'create_text','args':{'path':'C:/Docs/long.txt','text':text}}];approved=[]
+    async def chat(*args):return {'text':'ok'}
+    async def approve(ident,yes):approved.append((ident,yes));items.clear();return {'result':{'created':'long.txt'}}
+    hf,events=build(['haan approve','mic band karo'],chat,approve,lambda:list(items))
+    async def run():await hf.start(True,True);await hf.task
+    asyncio.run(run())
+    assert approved==[('long',True)]
+    assert all(len(chunk)<=1400 for chunk in hf.tts.spoken)
+    all_spoken=''.join(hf.tts.spoken)
+    assert text in all_spoken and 'Safety Center' not in all_spoken
