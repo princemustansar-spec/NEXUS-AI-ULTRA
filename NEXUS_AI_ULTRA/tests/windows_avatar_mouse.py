@@ -25,7 +25,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='nexus-avatar-mouse-') as directory:
         os.environ['NEXUS_DATA_DIR']=directory
         backend=LocalBackend(directory);backend.start()
-        main_window=webview.create_window('NEXUS mouse regression',backend.url,hidden=True)
+        main_window=webview.create_window('NEXUS mouse regression',html='<html><body style="margin:0;background:rgb(230,40,180)"></body></html>',x=100,y=100,width=700,height=550,frameless=True)
         avatar.attach(webview,main_window,backend.url+'/static/avatar.html')
         def rect(window):
             value=RECT();assert api.GetWindowRect(window.native.Handle.ToInt64(),ctypes.byref(value));return value
@@ -38,8 +38,18 @@ def main():
                     if window.evaluate_js("document.querySelector('#phase').textContent")=='READY':break
                     time.sleep(.1)
                 else:raise AssertionError('Avatar telemetry did not become ready')
+                window.move(220,180)
                 window.evaluate_js("window.mouseProbe={pointer:0,mouse:0};document.addEventListener('pointerdown',()=>mouseProbe.pointer++,true);document.addEventListener('mousedown',()=>mouseProbe.mouse++,true);")
                 time.sleep(.3)
+                api.GetDC.argtypes=[HWND];api.GetDC.restype=ctypes.c_void_p
+                api.ReleaseDC.argtypes=[HWND,ctypes.c_void_p]
+                gdi=ctypes.WinDLL('gdi32');gdi.GetPixel.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_int];gdi.GetPixel.restype=ctypes.c_uint
+                screen=api.GetDC(None)
+                box=rect(window);corner=gdi.GetPixel(screen,box.left+3,box.top+3)
+                api.ReleaseDC(None,screen)
+                result['corner_rgb']=[corner&255,(corner>>8)&255,(corner>>16)&255]
+                print(json.dumps(result),flush=True)
+                assert result['corner_rgb']==[230,40,180],'Avatar blank corner must reveal underlying desktop, not a backing rectangle'
                 for delta in (100,-80):
                     before=rect(window);x=(before.left+before.right)//2;y=(before.top+before.bottom)//2
                     assert api.SetCursorPos(x,y),'Interactive cursor could not be positioned'
@@ -66,7 +76,10 @@ def main():
                 api.SetCursorPos(saved.x,saved.y)
                 avatar.close();main_window.destroy()
         try:webview.start(run,gui='edgechromium',debug=False,private_mode=True)
-        finally:avatar.attach(None);backend.close()
+        finally:
+            avatar.attach(None);backend.close()
+            from nexus.app import store
+            store.db.close()
     if failures:raise SystemExit(1)
 
 
