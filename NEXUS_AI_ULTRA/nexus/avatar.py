@@ -4,13 +4,25 @@ import sys
 import logging
 
 
-def apply_form_cutout(form, key_color, transparent_color):
-    """Edge's alpha background must reveal a keyed native form, not Control white."""
+def extend_native_glass(handle):
+    import ctypes
+    class Margins(ctypes.Structure):
+        _fields_=[('left',ctypes.c_int),('right',ctypes.c_int),('top',ctypes.c_int),('bottom',ctypes.c_int)]
+    dwm=ctypes.WinDLL('dwmapi',use_last_error=True)
+    extend=dwm.DwmExtendFrameIntoClientArea
+    extend.argtypes=[ctypes.c_void_p,ctypes.POINTER(Margins)];extend.restype=ctypes.c_long
+    result=extend(handle,ctypes.byref(Margins(-1,-1,-1,-1)))
+    if result:raise OSError('Windows desktop transparency could not be initialized: '+str(result))
+
+
+def apply_form_cutout(form, black, transparent, empty):
+    """DWM glass retains HWND input; a keyed parent makes the WebView click-through."""
     form.AllowTransparency = True
-    form.BackColor = key_color
-    form.TransparencyKey = key_color
-    form.webview.BackColor = key_color
-    form.webview.DefaultBackgroundColor = transparent_color
+    form.TransparencyKey = empty
+    form.BackColor = black
+    form.webview.BackColor = black
+    form.webview.DefaultBackgroundColor = transparent
+    extend_native_glass(form.Handle.ToInt64())
     form.Invalidate()
 
 
@@ -118,7 +130,7 @@ class FloatingAvatar:
             def apply():
                 try:
                     if self.window is not window:return
-                    apply_form_cutout(form,Color.FromArgb(1,2,3),Color.Transparent)
+                    apply_form_cutout(form,Color.Black,Color.Transparent,Color.Empty)
                     self.cutout_ready=True
                 except Exception:
                     logging.exception('Floating avatar native transparency failed')

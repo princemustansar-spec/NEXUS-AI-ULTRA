@@ -4,12 +4,13 @@ from nexus.avatar import FloatingAvatar, apply_form_cutout
 from create_shortcut import shortcut_target
 
 
-def test_native_form_and_actual_webview_both_use_transparency_key():
-    form=SimpleNamespace(webview=SimpleNamespace(),Invalidate=Mock())
-    key,transparent=object(),object()
-    apply_form_cutout(form,key,transparent)
+def test_native_glass_keeps_form_input_without_a_transparency_key(monkeypatch):
+    monkeypatch.setattr('nexus.avatar.extend_native_glass',Mock())
+    form=SimpleNamespace(webview=SimpleNamespace(),Handle=SimpleNamespace(ToInt64=lambda:123),Invalidate=Mock())
+    key,transparent,empty=object(),object(),object()
+    apply_form_cutout(form,key,transparent,empty)
     assert form.AllowTransparency
-    assert form.BackColor is key and form.TransparencyKey is key
+    assert form.BackColor is key and form.TransparencyKey is empty
     assert form.webview.BackColor is key and form.webview.DefaultBackgroundColor is transparent
     form.Invalidate.assert_called_once()
 
@@ -37,11 +38,12 @@ def test_repaired_source_shortcut_does_not_use_a_retained_old_exe(tmp_path):
 def test_cutout_is_applied_on_the_native_ui_thread(monkeypatch):
     import sys
     import nexus.avatar as module
-    key,transparent=object(),object()
-    color=SimpleNamespace(FromArgb=lambda r,g,b:key,Transparent=transparent)
+    key,transparent,empty=object(),object(),object()
+    color=SimpleNamespace(Black=key,Transparent=transparent,Empty=empty)
+    monkeypatch.setattr(module,'extend_native_glass',Mock())
     monkeypatch.setitem(sys.modules,'System',SimpleNamespace(Action=lambda fn:fn))
     monkeypatch.setitem(sys.modules,'System.Drawing',SimpleNamespace(Color=color))
-    form=SimpleNamespace(webview=SimpleNamespace(),InvokeRequired=True,BeginInvoke=Mock(side_effect=lambda fn:fn()),Invalidate=Mock())
+    form=SimpleNamespace(webview=SimpleNamespace(),Handle=SimpleNamespace(ToInt64=lambda:123),InvokeRequired=True,BeginInvoke=Mock(side_effect=lambda fn:fn()),Invalidate=Mock())
     window=SimpleNamespace(native=form)
     a=FloatingAvatar();a.window=window
     with monkeypatch.context() as patch:
@@ -49,4 +51,4 @@ def test_cutout_is_applied_on_the_native_ui_thread(monkeypatch):
         assert a.configure_cutout(window)
     assert a.cutout_ready
     form.BeginInvoke.assert_called_once()
-    assert form.TransparencyKey is key and form.webview.DefaultBackgroundColor is transparent
+    assert form.TransparencyKey is empty and form.webview.DefaultBackgroundColor is transparent

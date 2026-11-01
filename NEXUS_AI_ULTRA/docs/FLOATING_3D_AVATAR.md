@@ -45,3 +45,7 @@ Hold the left mouse button on the avatar itself and move it to drag the floating
 Auto voice listens for speech but stays silent during empty or unrecognized recordings. It sends no chat request for these clips and no longer greets or announces pending actions on startup. A sustained speech onset reduces accidental clicks being treated as speech. Actual microphone failures pause the session with a visual error instead of repeatedly speaking. Replies and action errors are spoken only after a recognized user request. Speaker failures also stop without a repeated speech attempt. Existing action and paid-request approvals still apply.
 
 Click the mic control to stop listening completely. Native Windows movement and microphone behavior still need a check on the user's laptop; automated tests cover dispatch, held-button guards, authentication and simulated silence/error cycles.
+
+### Windows hover and drag regression
+
+A color-keyed WinForms parent can look transparent while making its entire GPU-rendered WebView click-through. The avatar now uses DWM glass with an empty native TransparencyKey, plus a transparent WebView background. This preserves mouse input without restoring a backing rectangle. The Windows integration check opens the actual WebView2 avatar, verifies a blank corner reveals the underlying window, injects real cursor/button input, and checks left/right movement, release, hover controls, Motion and Open NEXUS. It uses temporary data and does not start the microphone or call an AI provider.
