@@ -76,9 +76,9 @@ def main():
                     box=rect(window)
                     api.SetCursorPos(round(box.left+bounds['x']*(box.right-box.left)/bounds['w']),round(box.top+bounds['y']*(box.bottom-box.top)/bounds['h']))
                     time.sleep(.2);api.mouse_event(2,0,0,0,0);time.sleep(.1);api.mouse_event(4,0,0,0,0);time.sleep(.3)
-                motion=window.evaluate_js("document.querySelector('#motion').textContent")
+                motion=window.evaluate_js("localStorage.getItem('core-motion')")
                 click_button('motion')
-                assert window.evaluate_js("document.querySelector('#motion').textContent")!=motion,'Motion button must receive actual click'
+                assert window.evaluate_js("localStorage.getItem('core-motion')")!=motion,'Motion button must receive actual click'
                 main_window.hide();time.sleep(.2);assert not main_window.native.Visible
                 click_button('dashboard')
                 deadline=time.monotonic()+3
