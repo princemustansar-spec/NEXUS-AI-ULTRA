@@ -68,7 +68,23 @@ def main():
                     assert abs((after.left-before.left)-delta)<=3 and abs((after.top-before.top)-20)<=3,'Actual avatar did not follow physical mouse input'
                     api.SetCursorPos(x+delta+50,y+70);time.sleep(.2);released=rect(window)
                     assert (released.left,released.top)==(after.left,after.top),'Avatar kept moving after mouse release'
-                print('Real transparent WebView2 avatar dragged left and right and stopped on release',flush=True)
+                # Hover is physical input too; exercise buttons without JS-dispatched clicks.
+                box=rect(window);api.SetCursorPos((box.left+box.right)//2,(box.top+box.bottom)//2);time.sleep(.3)
+                assert window.evaluate_js("getComputedStyle(document.querySelector('header')).opacity")=='1','Hover must reveal controls'
+                def click_button(name):
+                    bounds=window.evaluate_js("(()=>{const r=document.getElementById('"+name+"').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,w:innerWidth,h:innerHeight};})()")
+                    box=rect(window)
+                    api.SetCursorPos(round(box.left+bounds['x']*(box.right-box.left)/bounds['w']),round(box.top+bounds['y']*(box.bottom-box.top)/bounds['h']))
+                    time.sleep(.2);api.mouse_event(2,0,0,0,0);time.sleep(.1);api.mouse_event(4,0,0,0,0);time.sleep(.3)
+                motion=window.evaluate_js("document.querySelector('#motion').textContent")
+                click_button('motion')
+                assert window.evaluate_js("document.querySelector('#motion').textContent")!=motion,'Motion button must receive actual click'
+                main_window.hide();time.sleep(.2);assert not main_window.native.Visible
+                click_button('dashboard')
+                deadline=time.monotonic()+3
+                while not main_window.native.Visible and time.monotonic()<deadline:time.sleep(.1)
+                assert main_window.native.Visible,'Open NEXUS must receive actual click and show GUI'
+                print('Real transparent WebView2 avatar: left/right drag, release, hover, Motion and Open NEXUS clicks passed',flush=True)
             except BaseException:
                 failures.append(traceback.format_exc());print(failures[-1],flush=True)
             finally:
