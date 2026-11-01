@@ -95,3 +95,6 @@ html[data-core-motion=on] .core-scene.listening .ai-core{transform:scale(calc(1 
 html[data-core-motion=off] .orbit,html[data-core-motion=off] .core-symbol{animation:none!important}
 
 #voice-level{display:block;width:min(100%,480px);height:18px;margin:12px 0;accent-color:var(--cyan)}
+
+#floating-avatar{flex-shrink:0;font-size:11px;padding:8px}
+@media(max-width:700px){#floating-avatar{font-size:10px;padding:6px}.clock{display:none}}

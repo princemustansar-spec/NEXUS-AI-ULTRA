@@ -129,8 +129,13 @@ def run_desktop(backend, webview):
             raise RuntimeError('Could not create the NEXUS desktop window.')
         from .youtube import player
         player.attach(webview)
+        from .avatar import avatar
+        avatar.attach(webview, window, backend.url+'/static/avatar.html')
         if hasattr(window, 'events'):
-            window.events.closed += lambda: player.attach(None)
+            def close_companions():
+                avatar.attach(None)
+                player.attach(None)
+            window.events.closed += close_companions
         webview.start(
             gui='edgechromium', debug=False, http_server=False,
             private_mode=False, storage_path=str(backend.data_dir / 'webview'),
@@ -139,5 +144,7 @@ def run_desktop(backend, webview):
         raise RuntimeError('Desktop startup failed. Install Microsoft Edge WebView2 Evergreen Runtime if needed. ' + str(exc)) from exc
     finally:
         from .youtube import player
+        from .avatar import avatar
+        avatar.attach(None)
         player.attach(None)
         backend.close()

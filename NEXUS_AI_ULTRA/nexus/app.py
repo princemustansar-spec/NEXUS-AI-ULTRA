@@ -16,6 +16,7 @@ from .tools import Tools, CATALOG, explicit_youtube_request
 from .voice import VoiceService
 from .voice_online import recognition_locale
 from .youtube import media_intent, player as youtube_player
+from .avatar import avatar
 
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.getenv('NEXUS_DATA_DIR', str(Path.home() / '.nexus_ai_ultra')))
@@ -111,6 +112,21 @@ async def settings(request: Request):
         if any(not Path(p).is_dir() for p in roots): raise ValueError('Approved paths must be existing directories.')
         store.set('roots', roots)
     return dict(saved=True)
+
+@app.get('/api/avatar/status')
+def avatar_status():
+    # Compact local telemetry: no chat history, memory, keys or system monitoring.
+    v, t = voice.status(), tts.status()
+    return dict(token=session_token, available=avatar.available(),
+                voice={k:v[k] for k in ('phase','level_dbfs') if k in v},
+                tts={'phase':t.get('phase','idle')}, thinking=chat_lock.locked(), emergency=emergency)
+
+@app.post('/api/avatar/{action}')
+async def avatar_action(action: str):
+    if action not in ('show','close','dashboard'):
+        raise ValueError('Unknown avatar action')
+    return await asyncio.to_thread(getattr(avatar,action))
+
 
 @app.post('/api/providers/{ident}/connect')
 async def connect_provider(ident: str, request: Request):
