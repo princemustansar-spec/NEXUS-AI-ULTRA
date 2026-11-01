@@ -234,7 +234,7 @@ def voice_worker(connection, stop_event, operation, options, directory, keep_ope
                     if options.get('engine', 'offline') == 'google':
                         from .voice_online import google_transcribe
                         try:
-                            result = google_transcribe(audio, rate, options.get('locale','en-IN'), options['language']!='en', send)
+                            result = google_transcribe(audio, rate, options.get('locale') or ('ur-PK' if options['language']=='ur' else 'en-IN'), options['language']!='en', send)
                         except Exception as exc:
                             if not model_manifest(directory, verify=True):
                                 raise ValueError('Google recognition failed ('+type(exc).__name__+'). Offline fallback model is not installed. Check connectivity/language or install the tiny model.') from exc

@@ -1,0 +1,71 @@
+# Install and check the combined voice/chat preview on Windows
+
+This preview combines the voice-context/Urdu-locale fix from PR #4 and the larger chat from PR #5. It has not been merged into main.
+
+## Existing source installation
+
+1. Close NEXUS and its console. Open PowerShell **inside your existing NEXUS_AI_ULTRA folder**, where run.py is present. Do not run from a drive root or from Downloads.
+2. Run the following. It refuses to continue unless the current folder contains NEXUS source:
+
+```powershell
+if (!(Test-Path .\run.py) -or !(Test-Path .\nexus\app.py)) { throw 'Open PowerShell inside the existing NEXUS_AI_ULTRA folder first.' }
+$nexusUpdateScript = Join-Path $env:TEMP 'nexus-preview-update.ps1'
+Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/princemustansar-spec/jarvis/preview/voice-chat-install/NEXUS_AI_ULTRA/install_update.ps1' -OutFile $nexusUpdateScript
+powershell -NoProfile -ExecutionPolicy Bypass -File $nexusUpdateScript -Destination (Get-Location).Path -Revision 'preview/voice-chat-install'
+```
+
+The existing updater backs up the installation before overlaying source, preserves SQLite/user files and the credential namespace, installs requirements, and prints a rollback command. Keep that receipt. It does not merge GitHub branches. It does not rebuild a portable EXE; use START_UPDATED_NEXUS.bat so you launch the updated source instead of an old EXE.
+
+If you only have a portable EXE, or your folder has no run.py, do not use this command against an arbitrary directory; the installation method needs to be identified first.
+
+## Check on the actual PC
+
+- Launch START_UPDATED_NEXUS.bat.
+- Voice Assistant: choose Roman Urdu and set Google recognition locale to automatic or ur-PK. Existing explicit en-IN settings are deliberately preserved.
+- Press Voice, say “NEXUS, meri awaaz aa rahi hai tumhein?”, and compare the original Urdu transcript with the editable Roman Urdu text before Send.
+- Send and check that the assistant responds to the transcript. Enable “Speak AI responses” if spoken replies are desired.
+- Open AI Chat or Expand chat: the conversation should fill the content area; confirm the larger input, Voice and Send controls.
+- Verify existing chat history and provider configuration. Paid requests still need approval.
+
+## Verification performed in the Linux test environment
+
+Installed the previously missing SpeechRecognition 3.17.0, edge-tts 7.3.1 and pygame 2.6.1 dependencies into an isolated test directory. Full Python suite: 98 passed. Node transcript/review/retry test passed; Chromium layout tests passed at 1366x768, 1920x1080, 800x600 and 390x844. Compilation and JavaScript syntax checks passed. Updated the existing exact HTML/CSS baseline to reflect the requested layout; retained the voice-output preservation check.
+
+The user's Windows installation, Windows updater/COM/WebView2, real microphone transcription quality, live cloud inference, speaker output and 4GB-device RAM were not tested remotely. No access to that PC was available.
+
+## Microphone/core visual feedback update
+
+Added live input-level feedback to the core and a measured progress meter on Voice Assistant. Calibration, listening (with dBFS), transcription, errors and microphone-off states are shown explicitly. Input-level feedback resets after capture. The microphone still opens only after an explicit Voice/Start action; transcripts still require review and Send.
+
+Added a persisted Animation control with System / On / Off modes. System respects reduced-motion preferences; explicit On restores core rotation even when the OS requests reduced motion. Off disables core animation. This addresses the code's previous blanket animation suppression under reduced-motion settings without silently overriding that preference for everyone.
+
+Validation: 98 Python tests passed; Chromium tests verified actual changing rotation matrices, OS reduced-motion behavior and explicit override persistence, start action, calibration, increasing synthetic microphone levels, the Voice Assistant meter, transcription, errors, and no automatic microphone restart after reload. Four layout sizes and the transcript flow passed. Actual user Windows microphone/speaker behavior is still unverified.
+
+## Chat keyboard update
+
+Enter submits the existing chat form through the normal validation and approval path; Shift+Enter inserts a newline. Empty/whitespace drafts, repeated Enter keydown, composition/IME Enter and already-running requests do not submit. Ctrl/Alt/Meta+Enter are left unchanged. The Send button still works and request failures retain the draft. Browser keyboard tests and the existing transcript flow passed; JavaScript syntax passed. No backend or dependency change.
+
+## Automatic browser actions
+
+web_search and open_url previously required a separate approval. They now execute automatically through the existing validated browser tools. Paid inference, file changes, app launches, saved memory, WhatsApp drafts and other sensitive tools retain their approval requirements; tool disablement and Emergency Stop are still enforced.
+
+A small anchored parser handles direct YouTube commands such as `youtube open karo sad song lagao` and `open youtube and play sad song`. It opens YouTube search/home through the real browser tool without calling a model or a paid API. It ignores supported negative commands and does not treat general questions as launch instructions. Other requests still use normal model/tool routing. The response reports the browser launch request or failure; it does not claim page loading or song playback. The tool schema/system prompt also distinguish automatic browser tools from actual pending approvals and forbid unsupported execution claims.
+
+A screenshot showing no pending actions cannot establish whether an earlier request was never queued or had expired (existing approvals expire after five minutes); user-side activity logs were unavailable. The direct YouTube path removes this ambiguity for supported commands.
+
+Validation: 117 Python tests passed, including 19 browser-action tests covering actual tool invocation with mocked browser launch, launch failure, no model/paid request, query encoding, negative/noncommand text, disabled tools, Emergency Stop, public-URL validation and retained file approvals. Existing transcript flow and JavaScript syntax checks passed. No real browser was launched on the user's PC during these tests. Use the updated source revision; main remains unmerged.
+
+## Controlled YouTube playback
+
+The native Windows host can now create one reusable NEXUS YouTube WebView2 window. It uses the runtime already required by the desktop app: no new package, bundled Chrome, CDP server, GPU model or browser download. Personal browser tabs are not attached or controlled. Headless mode returns an explicit unsupported error.
+
+Commands (type or transcribe/review/Send):
+- `sad song play karo` or `youtube open karo sad song lagao`: search and select the first standard video result.
+- `jo gana search kiya hin usy play kro`: use the owned search session, or recover the most recent explicit YouTube query and open it in NEXUS's window.
+- `pause karo`, `resume karo`, `next song play karo` / `agla gana chalao`.
+
+Generic media commands use the validated youtube_player tool. Simple supported commands also have a direct local route without model/paid inference. Tool disablement and Emergency Stop remain enforced. Main-window close shuts down its media window; Emergency Stop closes it. Only the controlled youtube.com window receives playback scripts, with js_api=None; query strings are URL-encoded instead of interpolated into JavaScript.
+
+Success is based on observed video state (not paused/ended, ready media, advancing playback time). Next additionally requires a changed video. Ads, missing Next controls, blocked autoplay, consent/sign-in pages, network failure, unsupported DOM changes and absent native sessions return blocked/error results rather than invented success. If YouTube requires consent or a first manual Play, handle it in the visible NEXUS YouTube window and retry. No ad/captcha/sign-in bypass is implemented.
+
+Validation: 136 Python tests passed for parser/controller/application routing, previous search recovery, no inference call, disabled tools, Emergency Stop, native-host reuse/cleanup, stalled playback, ads/external pages and stale Next results. Production DOM scripts passed against locally intercepted YouTube-shaped pages with a real HTML media element: result click, advancing playback time, pause, resume and next video. Existing voice transcript/Enter keyboard browser tests passed; Python compilation and JS syntax passed. No live YouTube request or Windows WebView2 media test was performed; actual device RAM/playback performance is unmeasured. Existing source updates still use START_UPDATED_NEXUS.bat, not a retained old portable EXE.
