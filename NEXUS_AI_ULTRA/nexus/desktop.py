@@ -113,7 +113,7 @@ def load_webview():
     return webview
 
 
-def run_desktop(backend, webview):
+def run_desktop(backend, webview, floating=False):
     """Called on the main thread. Closing the only native window stops our API."""
     try:
         state = backend.start()
@@ -122,22 +122,42 @@ def run_desktop(backend, webview):
         webview.settings['ALLOW_DOWNLOADS'] = False
         window = webview.create_window(
             state['name'], backend.url, width=1366, height=900,
-            min_size=(800, 600), resizable=True, maximized=True,
+            min_size=(800, 600), resizable=True, maximized=not floating, hidden=floating,
             background_color='#030d18', text_select=True, js_api=None,
         )
         if window is None:
             raise RuntimeError('Could not create the NEXUS desktop window.')
         from .youtube import player
         player.attach(webview)
+        from .avatar import avatar
+        avatar.attach(webview, window, backend.url+'/static/avatar.html')
         if hasattr(window, 'events'):
-            window.events.closed += lambda: player.attach(None)
-        webview.start(
-            gui='edgechromium', debug=False, http_server=False,
-            private_mode=False, storage_path=str(backend.data_dir / 'webview'),
-        )
+            def close_companions():
+                avatar.attach(None)
+                player.attach(None)
+            window.events.closed += close_companions
+        options=dict(gui='edgechromium',debug=False,http_server=False,private_mode=False,storage_path=str(backend.data_dir/'webview'))
+        if floating:
+            def begin_floating():
+                try:
+                    avatar.show()
+                    connection=http.client.HTTPConnection(HOST,backend.port,timeout=10)
+                    try:
+                        connection.request('POST','/api/handsfree/start',body=json.dumps({'consent':True,'online_consent':True}),headers={'Content-Type':'application/json','X-Nexus-Token':state['token']})
+                        response=connection.getresponse();body=response.read()
+                        if response.status!=200:raise RuntimeError(body.decode('utf-8')[:300])
+                    finally:connection.close()
+                except Exception as exc:
+                    import logging
+                    logging.warning('Floating auto voice start failed: %s',exc)
+                    avatar.dashboard()
+            webview.start(begin_floating,**options)
+        else:webview.start(**options)
     except Exception as exc:
         raise RuntimeError('Desktop startup failed. Install Microsoft Edge WebView2 Evergreen Runtime if needed. ' + str(exc)) from exc
     finally:
         from .youtube import player
+        from .avatar import avatar
+        avatar.attach(None)
         player.attach(None)
         backend.close()
