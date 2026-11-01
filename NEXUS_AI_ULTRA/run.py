@@ -29,7 +29,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='NEXUS native desktop application (Windows WebView2).')
     parser.add_argument('--headless', '--no-browser', dest='headless', action='store_true', help='Run only the local API for development/tests; never open a browser.')
     parser.add_argument('--floating',action='store_true',help='Start the figure-only avatar and auto voice without showing the dashboard.')
+    parser.add_argument('--gui',action='store_true',help='Open the dashboard regardless of the saved desktop start mode.')
     args = parser.parse_args(argv)
+    if args.gui and (args.headless or args.floating):parser.error('--gui cannot be combined with --headless or --floating')
     if args.floating and args.headless:parser.error('--floating cannot be used with --headless')
     backend = None
     try:
@@ -46,6 +48,7 @@ def main(argv=None):
                 raise RuntimeError('Backend failed. See desktop.log.') from backend.failure
         else:
             if args.floating:run_desktop(backend,webview,floating=True)
+            elif args.gui:run_desktop(backend,webview,floating=False)
             else:run_desktop(backend, webview)
         return 0
     except Exception as exc:

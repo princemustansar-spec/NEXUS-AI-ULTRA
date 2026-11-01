@@ -113,10 +113,11 @@ def load_webview():
     return webview
 
 
-def run_desktop(backend, webview, floating=False):
+def run_desktop(backend, webview, floating=None):
     """Called on the main thread. Closing the only native window stops our API."""
     try:
         state = backend.start()
+        if floating is None:floating=state.get('avatar_settings',{}).get('desktop_mode')=='floating'
         # Reuse OS WebView2; no bundled Qt/CEF/Electron or default-browser launch.
         webview.settings['ALLOW_FILE_URLS'] = False
         webview.settings['ALLOW_DOWNLOADS'] = False
@@ -141,6 +142,7 @@ def run_desktop(backend, webview, floating=False):
             def begin_floating():
                 try:
                     avatar.show()
+                    if not state.get('avatar_settings',{}).get('auto_voice',True):return
                     connection=http.client.HTTPConnection(HOST,backend.port,timeout=10)
                     try:
                         connection.request('POST','/api/handsfree/start',body=json.dumps({'consent':True,'online_consent':True}),headers={'Content-Type':'application/json','X-Nexus-Token':state['token']})

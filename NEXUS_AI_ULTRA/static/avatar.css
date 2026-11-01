@@ -12,3 +12,13 @@ body{padding:0}.avatar-shell{position:relative;border:0;border-radius:0;backgrou
 #mic{position:fixed;bottom:4px;right:6px;width:23px;height:23px;padding:0;border-radius:50%;font-size:0;background:#042438cc;pointer-events:auto;opacity:1;z-index:3}
 #mic:after{content:'●';font-size:15px;color:#7898a5}#mic[data-active=true]:after{color:#2cffa7;filter:drop-shadow(0 0 4px #14eaa9)}
 #mic[data-active=true]{border-color:#1cc989}html[data-phase=approval] #phase{color:#ffd47a}
+
+/* Every control is hover/focus-only; native colour-keying removes the parent form. */
+.avatar-shell #mic{opacity:0;pointer-events:none;transition:opacity .15s}
+.avatar-shell:hover #mic,.avatar-shell:focus-within #mic{opacity:1;pointer-events:auto}
+.avatar-shell:not(:hover):not(:focus-within):not(.controls-open) #phase{display:none!important}
+
+.avatar-shell.controls-open header{opacity:1;pointer-events:auto}
+.avatar-shell.controls-open #mic{opacity:1;pointer-events:auto}
+.avatar-shell.controls-open #phase{display:block;font-size:9px;letter-spacing:1px}
+.avatar-shell.controls-open #dashboard{display:inline-block;margin-top:3px;font-size:9px;padding:3px 9px;pointer-events:auto}
