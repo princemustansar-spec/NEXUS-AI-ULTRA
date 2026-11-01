@@ -101,11 +101,19 @@ def state():
                 chat=list(reversed(store.list('chat', 100))), memory=store.list('memory'), reminders=store.list('reminder'),
                 activity=store.list('activity',50), notifications=store.list('notification',50), preferred_provider=store.get('preferred_provider',''),
                 voice=voice.status(), tts=tts.status(), handsfree=handsfree.status(), voice_muted=store.get('voice_muted',False),
+                avatar_settings={'visible':avatar.window is not None,'desktop_mode':store.get('desktop_mode','gui'),'auto_voice':store.get('avatar_auto_voice',True),'cutout_ready':avatar.cutout_ready},
                 voice_settings={**{'device':None,'language':'ur','seconds':8,'engine':'google','locale':'auto','silence_timeout':.8,'start_timeout':5},**store.get('voice_settings',{})})
 
 @app.post('/api/settings')
 async def settings(request: Request):
     b = await request.json()
+    if 'avatar_settings' in b:
+        options=b['avatar_settings']
+        if not isinstance(options,dict) or options.get('desktop_mode') not in ('gui','floating') or type(options.get('auto_voice')) is not bool:
+            raise ValueError('Choose Dashboard or Floating AI and an auto voice preference.')
+        store.set('desktop_mode',options['desktop_mode'])
+        store.set('avatar_auto_voice',options['auto_voice'])
+        if not options['auto_voice'] and handsfree.running:await handsfree.stop()
     if 'providers' in b: providers.save(b['providers'])
     if 'name' in b: store.set('name', str(b['name'])[:80])
     if 'preferred_provider' in b: store.set('preferred_provider',str(b['preferred_provider']))
@@ -114,6 +122,12 @@ async def settings(request: Request):
         if any(not Path(p).is_dir() for p in roots): raise ValueError('Approved paths must be existing directories.')
         store.set('roots', roots)
     return dict(saved=True)
+
+@app.post('/api/desktop/shortcut')
+async def update_desktop_shortcut():
+    from create_shortcut import repair_source_shortcut
+    return await asyncio.to_thread(repair_source_shortcut,BASE)
+
 
 @app.get('/api/avatar/status')
 def avatar_status():

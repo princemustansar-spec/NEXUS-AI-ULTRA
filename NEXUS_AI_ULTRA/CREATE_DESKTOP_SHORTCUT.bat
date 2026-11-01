@@ -5,5 +5,5 @@ if not exist .venv\Scripts\python.exe (
  pause
  exit /b 1
 )
-.venv\Scripts\python create_shortcut.py
+.venv\Scripts\python create_shortcut.py --source
 pause

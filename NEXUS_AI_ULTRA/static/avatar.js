@@ -2,6 +2,9 @@
 (()=>{
  const $=id=>document.getElementById(id),canvas=$('avatar');
  let token='',autoVoice=false,polling=false,phase='idle',signal=0,pollTimer=0,frame=0,last=0,disposed=false;
+ const shell=document.querySelector('.avatar-shell');let controlsTimer=0;
+ shell.addEventListener('pointerenter',()=>{clearTimeout(controlsTimer);shell.classList.add('controls-open');});
+ shell.addEventListener('pointerleave',()=>{clearTimeout(controlsTimer);controlsTimer=setTimeout(()=>shell.classList.remove('controls-open'),600);});
  const media=matchMedia('(prefers-reduced-motion: reduce)');
  const motion=()=>{const p=localStorage.getItem('core-motion')||'system';return p==='on'||(p!=='off'&&!media.matches);};
  function motionLabel(){$('motion').textContent='Motion: '+(motion()?'On':'Off');$('motion').setAttribute('aria-pressed',String(motion()));}
@@ -62,5 +65,5 @@
   frame=requestAnimationFrame(render);
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();cancelAnimationFrame(frame);fallback('3D paused · graphics context lost');});canvas.addEventListener('webglcontextrestored',()=>location.reload());
  }catch(e){fallback('3D unavailable · status still active');}
- poll();addEventListener('beforeunload',()=>{disposed=true;clearTimeout(pollTimer);cancelAnimationFrame(frame);});
+ poll();addEventListener('beforeunload',()=>{disposed=true;clearTimeout(pollTimer);clearTimeout(controlsTimer);cancelAnimationFrame(frame);});
 })();

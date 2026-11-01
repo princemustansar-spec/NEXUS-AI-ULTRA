@@ -13,7 +13,7 @@ if errorlevel 1 (
 )
 .venv\Scripts\python -m pip install -r requirements.txt
 if errorlevel 1 goto failed
-.venv\Scripts\python create_shortcut.py
+.venv\Scripts\python create_shortcut.py --source
 if errorlevel 1 echo Shortcut creation failed; START_NEXUS.bat still launches the desktop app.
 echo Installation complete. Run START_NEXUS.bat or the NEXUS desktop shortcut.
 echo If WebView2 is missing, install Microsoft Edge WebView2 Evergreen Runtime.

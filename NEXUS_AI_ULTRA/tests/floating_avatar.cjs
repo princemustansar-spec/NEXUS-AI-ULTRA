@@ -19,7 +19,11 @@ const root=path.resolve(__dirname,'..');
   await page.waitForFunction(()=>document.querySelector('#phase').textContent==='READY');
   assert.equal(await page.locator('.avatar-shell').evaluate(e=>getComputedStyle(e).backgroundImage),'none');
   assert.equal(await page.locator('.avatar-shell').evaluate(e=>getComputedStyle(e).borderTopWidth),'0px');
-  assert(await page.locator('#mic').isVisible());
+  await page.mouse.move(500,500);await page.waitForTimeout(820);
+  assert.equal(await page.locator('#mic').evaluate(e=>getComputedStyle(e).opacity),'0');
+  assert.equal(await page.locator('header').evaluate(e=>getComputedStyle(e).opacity),'0');
+  await page.locator('canvas').hover();await page.waitForTimeout(180);
+  assert.equal(await page.locator('#mic').evaluate(e=>getComputedStyle(e).opacity),'1');
   await page.locator('#mic').click();await page.waitForFunction(()=>document.querySelector('#mic').dataset.active==='true');
   await page.locator('#mic').click();await page.waitForFunction(()=>document.querySelector('#mic').dataset.active==='false');
   assert.equal(actions.filter(a=>a==='/api/handsfree/start').length,1);
@@ -36,7 +40,7 @@ const root=path.resolve(__dirname,'..');
   assert(actions.includes('/api/avatar/dashboard')&&actions.includes('/api/avatar/close'));
   await page.evaluate(()=>{localStorage.setItem('core-motion','off');dispatchEvent(new StorageEvent('storage'));});
   await page.waitForTimeout(150);const stillA=await page.locator('canvas').screenshot();await page.waitForTimeout(250);const stillB=await page.locator('canvas').screenshot();assert(stillA.equals(stillB),'motion Off must stop visible animation');
-  if(process.env.AVATAR_SCREENSHOT_DIR){fs.mkdirSync(process.env.AVATAR_SCREENSHOT_DIR,{recursive:true});state.emergency=false;state.voice={phase:'listening',level_dbfs:-25};await page.waitForFunction(()=>document.querySelector('#phase').textContent==='LISTENING');await page.mouse.move(500,500);await page.waitForTimeout(180);await page.screenshot({path:path.join(process.env.AVATAR_SCREENSHOT_DIR,'floating-avatar.png'),omitBackground:true});}
+  if(process.env.AVATAR_SCREENSHOT_DIR){fs.mkdirSync(process.env.AVATAR_SCREENSHOT_DIR,{recursive:true});state.emergency=false;state.voice={phase:'listening',level_dbfs:-25};await page.waitForFunction(()=>document.querySelector('#phase').textContent==='LISTENING');await page.mouse.move(500,500);await page.waitForTimeout(820);await page.screenshot({path:path.join(process.env.AVATAR_SCREENSHOT_DIR,'floating-avatar.png'),omitBackground:true});}
   assert(requests.every(p=>p.startsWith('/static/')||p.startsWith('/api/avatar/')||p.startsWith('/api/handsfree/')),'avatar must not request AI providers, chat history or voice capture');assert.deepEqual(errors,[]);
   console.log('Figure-only + auto-voice start/stop:  WebGL pixels/movement, transparent background, live states, level, motion Off, authenticated controls, telemetry-only requests: passed');
  }finally{await browser.close();}

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Destination,
-    [string]$Revision = 'feature/jarvis-voice-upgrade',
+    [string]$Revision = 'main',
     [string]$ArchivePath,
     [switch]$Rollback,
     [string]$BackupPath
@@ -146,7 +146,7 @@ try {
         $link.WorkingDirectory = $Destination
         $link.Save()
     } catch { Write-Warning 'Desktop shortcut update failed; use START_UPDATED_NEXUS.bat.' }
-    Write-Host "Updated. Launch $launcher. Existing portable EXEs were retained; rebuild them separately."
+    Write-Host "Updated. Desktop shortcut points to this updated source. Its start mode follows Floating AI settings. Launch $launcher if needed."
     if ($backup) { Write-Host "Backup: $backup"; Write-Host "Rollback: powershell -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Destination `"$Destination`" -Rollback -BackupPath `"$backup`"" }
     Write-Host 'SQLite, models, user files and OS credential storage were not deleted or uploaded.'
 } catch {

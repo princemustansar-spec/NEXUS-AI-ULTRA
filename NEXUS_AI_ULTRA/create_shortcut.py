@@ -1,12 +1,16 @@
 """Create a native desktop shortcut without changing PowerShell execution policy."""
 import os
+import argparse
 from pathlib import Path
 import subprocess
 import sys
 
 
-def shortcut_target(root):
+def shortcut_target(root, prefer_source=False):
     root = Path(root).resolve()
+    pythonw = root / '.venv' / 'Scripts' / 'pythonw.exe'
+    if prefer_source and pythonw.is_file() and (root/'run.py').is_file():
+        return pythonw, '"'+str(root/'run.py')+'"', root
     portable = root / 'dist' / 'NEXUS_AI_ULTRA' / 'NEXUS_AI_ULTRA.exe'
     if portable.is_file():
         return portable, '', portable.parent
@@ -18,13 +22,23 @@ def shortcut_target(root):
     return pythonw, '"' + str(root / 'run.py') + '"', root
 
 
+def repair_source_shortcut(root):
+    if sys.platform!='win32':raise ValueError('Desktop shortcut updates require Windows.')
+    result=subprocess.run([sys.executable,str(Path(root)/'create_shortcut.py'),'--source'],capture_output=True,text=True)
+    if result.returncode:raise ValueError('Desktop shortcut update failed. '+result.stdout[-200:])
+    return {'updated':True}
+
+
 def main():
     if sys.platform != 'win32':
         print('Desktop shortcuts require Windows.')
         return 1
     try:
+        parser=argparse.ArgumentParser()
+        parser.add_argument('--source',action='store_true',help='Prefer the updated Python source over retained portable EXEs.')
+        options=parser.parse_args()
         root = Path(__file__).resolve().parent
-        target, arguments, working = shortcut_target(root)
+        target, arguments, working = shortcut_target(root,prefer_source=options.source)
         # Paths stay in environment values, never interpolated into PowerShell code.
         script = '''$ErrorActionPreference = 'Stop'
 $desktop = [Environment]::GetFolderPath('Desktop')
