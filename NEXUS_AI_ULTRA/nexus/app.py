@@ -133,13 +133,13 @@ async def update_desktop_shortcut():
 def avatar_status():
     # Compact local telemetry: no chat history, memory, keys or system monitoring.
     v, t = voice.status(), tts.status()
-    return dict(token=session_token, available=avatar.available(),
+    return dict(token=session_token, available=avatar.available(), drag_mode='native' if avatar.can_native_drag() else 'bridge',
                 voice={k:v[k] for k in ('phase','level_dbfs') if k in v},
                 tts={'phase':t.get('phase','idle')}, handsfree=handsfree.status(), thinking=chat_lock.locked(), emergency=emergency)
 
 @app.post('/api/avatar/{action}')
 async def avatar_action(action: str):
-    if action not in ('show','close','dashboard'):
+    if action not in ('show','close','dashboard','drag'):
         raise ValueError('Unknown avatar action')
     if action=='close':
         await handsfree.stop()

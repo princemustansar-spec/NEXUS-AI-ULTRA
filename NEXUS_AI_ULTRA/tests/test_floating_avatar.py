@@ -20,7 +20,7 @@ def test_avatar_is_lazy_reused_draggable_on_top_and_independently_closed():
     host.create_window.assert_not_called()
     assert a.show()['visible']
     options=host.create_window.call_args.kwargs
-    assert options['transparent'] and options['frameless'] and options['easy_drag'] and options['on_top']
+    assert options['transparent'] and options['frameless'] and not options['easy_drag'] and options['on_top']
     assert options['js_api'] is None and not options['focus']
     a.show();assert host.create_window.call_count==1;window.show.assert_called_once()
     a.dashboard();main.show.assert_called_once();main.restore.assert_called_once()

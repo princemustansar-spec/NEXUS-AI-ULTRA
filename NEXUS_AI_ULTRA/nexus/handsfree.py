@@ -15,6 +15,15 @@ def normalized(text):
     return re.sub(r'^(?:nexus|niks|nikss|nexis|نیکسس|نکسس)\s+', '', value)
 
 
+class VoiceJobError(ValueError):
+    def __init__(self, message, code=None):
+        super().__init__(message);self.code=code
+
+
+class SpeechOutputError(ValueError):
+    pass
+
+
 class HandsFree:
     def __init__(self, store, voice, tts, chat, approve, pending, emergency):
         self.store,self.voice,self.tts=store,voice,tts
@@ -63,7 +72,7 @@ class HandsFree:
             if status.get('job_id')!=job['job_id']:raise ValueError('Auto voice operation changed; session stopped.')
             if status['phase']=='done':return status.get('result',{})
             if status['phase'] in ('error','cancelled'):
-                raise ValueError(status.get('error') or 'Voice operation cancelled.')
+                raise VoiceJobError(status.get('error') or 'Voice operation cancelled.',status.get('error_code'))
             await asyncio.sleep(.15)
         raise ValueError('Auto voice stopped or timed out.')
 
@@ -72,8 +81,10 @@ class HandsFree:
         self.phase='speaking'
         clean=re.sub(r'[*#`]', '', str(text)).strip()
         for offset in range(0,len(clean),1400):
-            job=await asyncio.to_thread(self.tts.start,'tts',text=clean[offset:offset+1400],allow_online=self.options.get('allow_online_tts',False))
-            await self._job(self.tts,job)
+            try:
+                job=await asyncio.to_thread(self.tts.start,'tts',text=clean[offset:offset+1400],allow_online=self.options.get('allow_online_tts',False))
+                await self._job(self.tts,job)
+            except ValueError as exc:raise SpeechOutputError(str(exc)) from exc
         # No capture while speaking; allow the final speaker audio to decay.
         await asyncio.sleep(.4)
 
@@ -84,8 +95,10 @@ class HandsFree:
         try:
             result=await self._job(self.voice,job)
         except ValueError as exc:
-            if 'No speech detected' in str(exc):return ''
+            idle_messages=('no speech detected','no speech was recognized','no microphone signal detected','recording stopped before any audio','unknownvalueerror')
+            if getattr(exc,'code',None)=='no_speech' or any(value in str(exc).lower() for value in idle_messages):return ''
             raise
+        if result.get('no_speech') or result.get('diagnostics',{}).get('silence'):return ''
         original=normalized(str(result.get('original_text','')))
         if original in {'مائیک بند کرو','میک بند کرو','مائیک بند کر دو','مائیکروفون بند کرو'}:
             return 'mic band karo'
@@ -136,17 +149,20 @@ class HandsFree:
 
     async def _run(self):
         try:
-            await self._say('Auto voice on hai. Baat karne ke baad rukain, main jawab dunga. Mic band karo keh kar rok sakte hain.')
-            await self._next_approval()
             while self.running and not self.emergency():
+                # Capture failures are visual-only: never speak/retry complaints on an idle timer.
+                text=await self._capture()
+                if not text:
+                    await asyncio.sleep(.15)
+                    continue
                 try:
-                    text=await self._capture()
-                    if not text:continue
                     if normalized(text) in STOP:
                         await self._say('Auto voice band kar di.');break
                     if self.confirmation:await self._confirmed(text)
                     else:await self._reply(text)
                     self.failures=0
+                except SpeechOutputError:
+                    raise
                 except ValueError as exc:
                     self.failures+=1
                     if self.failures>=3:raise
