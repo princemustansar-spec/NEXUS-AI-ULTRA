@@ -81,7 +81,7 @@ try {
     if (-not $ArchivePath) {
         if ($Revision -notmatch '^[A-Za-z0-9_./-]+$' -or $Revision.Contains('..')) { throw 'Invalid revision.' }
         $ArchivePath = Join-Path $temp 'source.zip'
-        $url = 'https://github.com/princemustansar-spec/jarvis/archive/' + $Revision + '.zip'
+        $url = 'https://github.com/princemustansar-spec/NEXUS-AI-ULTRA/archive/' + $Revision + '.zip'
         Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $ArchivePath
     }
     $unpack = Join-Path $temp 'unpack'

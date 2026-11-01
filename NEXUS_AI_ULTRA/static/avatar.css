@@ -22,3 +22,5 @@ body{padding:0}.avatar-shell{position:relative;border:0;border-radius:0;backgrou
 .avatar-shell.controls-open #mic{opacity:1;pointer-events:auto}
 .avatar-shell.controls-open #phase{display:block;font-size:9px;letter-spacing:1px}
 .avatar-shell.controls-open #dashboard{display:inline-block;margin-top:3px;font-size:9px;padding:3px 9px;pointer-events:auto}
+
+#avatar,.fallback-face{cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}#avatar:active,.fallback-face:active{cursor:grabbing}

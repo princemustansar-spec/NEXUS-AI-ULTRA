@@ -37,3 +37,11 @@ Every avatar button and caption is now hidden outside hover/keyboard focus, incl
 The updater repairs the same desktop shortcut to the updated .venv Python source, preserving the existing SQLite/keys. Source shortcut helpers now prefer updated source over a retained old portable EXE, so an old EXE cannot silently reopen after a source update. The GUI shortcut-repair action is session-protected. No login/autostart registry task is added; the normal desktop shortcut honors the saved mode. The updater's default revision is now main.
 
 Validation for this follow-up: 167 Python tests passed, including native parent/control cutout properties, UI-thread dispatch, preserved GUI visibility, validated/persisted preferences, auto-voice shutdown on opt-out, saved/explicit launch modes and source-over-old-EXE shortcut repair. Chromium tests passed for hover-only controls, transparent scene, Settings save/show/hide, mic opt-out and shortcut action; existing four-size chat layout/manual transcript checks passed. Native Windows visual transparency, desktop mouse hit-through, actual user shortcut/OneDrive permissions and audio hardware remain unverified remotely; Windows CI tests use explicit native doubles.
+
+### Quiet listening and mouse movement
+
+Hold the left mouse button on the avatar itself and move it to drag the floating window. Windows uses its native caption move loop; other hosts retain the marked pywebview drag region. Hover controls remain independent buttons.
+
+Auto voice listens for speech but stays silent during empty or unrecognized recordings. It sends no chat request for these clips and no longer greets or announces pending actions on startup. A sustained speech onset reduces accidental clicks being treated as speech. Actual microphone failures pause the session with a visual error instead of repeatedly speaking. Replies and action errors are spoken only after a recognized user request. Speaker failures also stop without a repeated speech attempt. Existing action and paid-request approvals still apply.
+
+Click the mic control to stop listening completely. Native Windows movement and microphone behavior still need a check on the user's laptop; automated tests cover dispatch, held-button guards, authentication and simulated silence/error cycles.

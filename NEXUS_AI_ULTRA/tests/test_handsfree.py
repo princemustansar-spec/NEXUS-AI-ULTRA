@@ -14,6 +14,7 @@ class Voice:
     def status(self):
         if not self.job:return {'phase':self.phase}
         if self.text is None:return {'job_id':str(self.job),'phase':'listening'}
+        if isinstance(self.text,dict):return {'job_id':str(self.job),**self.text}
         return {'job_id':str(self.job),'phase':'done','result':{'text':self.text}}
     def start(self,operation,**options):
         assert operation=='capture';self.job+=1;self.text=self.texts.pop(0) if self.texts else None
@@ -50,7 +51,7 @@ def test_conversation_autosends_then_speaks_and_stops_on_voice(fast):
         await hf.start(True,True);await hf.task
     asyncio.run(run())
     assert calls==[('hello',False)] and not hf.running
-    assert events[0][0]=='speak' and events[1]==('capture','hello') and events[2][0]=='speak'
+    assert events[0]==('capture','hello') and events[1][0]=='speak' and events[2]==('capture','mic band karo')
     assert hf.voice.cancelled==1 and hf.tts.cancelled==1
 
 
@@ -111,12 +112,14 @@ def test_capture_and_online_consent_required(consent,online):
     assert not events
 
 
-def test_tts_failure_stops_mode_before_listening(fast):
-    async def chat(*args):raise AssertionError()
+def test_tts_failure_after_request_stops_without_error_speech_loop(fast):
+    async def chat(*args):return {'text':'reply'}
     hf,events=build(['hello'],chat)
     hf.tts.start=Mock(side_effect=ValueError('No speaker installed'))
     async def run():await hf.start(True,True);await hf.task
-    asyncio.run(run());assert hf.phase=='error' and 'speaker' in hf.error and not any(kind=='capture' for kind,text in events)
+    asyncio.run(run());assert hf.phase=='error' and 'speaker' in hf.error
+    assert [text for kind,text in events if kind=='capture']==['hello']
+    hf.tts.start.assert_called_once()
 
 
 def test_original_urdu_confirmation_and_stop_are_not_lost_to_roman_spelling(fast):
@@ -136,7 +139,7 @@ def test_spoken_tool_denial_never_approves(fast):
     items=[{'id':'one','name':'move_file','args':{'source':'C:/one','destination':'C:/two'}}];approvals=[]
     async def chat(*args):return {'text':'ok'}
     async def approve(ident,yes):approvals.append((ident,yes));items.clear();return {'denied':True}
-    hf,events=build(['nahi cancel','mic band karo'],chat,approve,lambda:list(items))
+    hf,events=build(['hello','nahi cancel','mic band karo'],chat,approve,lambda:list(items))
     async def run():await hf.start(True,True);await hf.task
     asyncio.run(run());assert approvals==[('one',False)]
 
@@ -146,10 +149,39 @@ def test_long_approval_details_are_spoken_in_chunks_without_opening_gui(fast):
     items=[{'id':'long','name':'create_text','args':{'path':'C:/Docs/long.txt','text':text}}];approved=[]
     async def chat(*args):return {'text':'ok'}
     async def approve(ident,yes):approved.append((ident,yes));items.clear();return {'result':{'created':'long.txt'}}
-    hf,events=build(['haan approve','mic band karo'],chat,approve,lambda:list(items))
+    hf,events=build(['hello','haan approve','mic band karo'],chat,approve,lambda:list(items))
     async def run():await hf.start(True,True);await hf.task
     asyncio.run(run())
     assert approved==[('long',True)]
     assert all(len(chunk)<=1400 for chunk in hf.tts.spoken)
     all_spoken=''.join(hf.tts.spoken)
     assert text in all_spoken and 'Safety Center' not in all_spoken
+
+
+@pytest.mark.parametrize('idle',[
+    {'phase':'error','error':'quiet capture','error_code':'no_speech'},
+    {'phase':'error','error':'No microphone signal detected. Run diagnostics.'},
+    {'phase':'error','error':'No speech was recognized. Try again.'},
+    {'phase':'error','error':'Google recognition failed (UnknownValueError). Offline fallback missing.'},
+    {'phase':'done','result':{'text':''}},
+    {'phase':'done','result':{'text':'hallucinated text','diagnostics':{'silence':True}}},
+])
+def test_quiet_cycles_make_no_ai_requests_or_speech_then_answer_real_request(fast,idle):
+    calls=[]
+    async def chat(text,paid):calls.append(text);return {'text':'Recognized request answered'}
+    hf,events=build([idle]*12+['actual request','mic band karo'],chat)
+    async def run():await hf.start(True,True);await hf.task
+    asyncio.run(run())
+    assert calls==['actual request']
+    assert hf.tts.spoken==['Recognized request answered','Auto voice band kar di.']
+    assert hf.failures==0
+
+
+def test_capture_fault_pauses_visually_without_timer_driven_complaints(fast):
+    async def chat(*args):raise AssertionError('No recognized request')
+    hf,events=build([{'phase':'error','error':'Microphone could not be opened'}],chat)
+    async def run():await hf.start(True,True);await hf.task
+    asyncio.run(run())
+    assert hf.phase=='error' and not hf.running
+    assert hf.tts.spoken==[]
+    assert hf.voice.cancelled==1

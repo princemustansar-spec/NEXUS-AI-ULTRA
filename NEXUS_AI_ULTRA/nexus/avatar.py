@@ -14,6 +14,14 @@ def apply_form_cutout(form, key_color, transparent_color):
     form.Invalidate()
 
 
+def native_move_loop(user32, handle):
+    # Do not enter a modal move loop after a short click has already been released.
+    if not user32.GetAsyncKeyState(0x01) & 0x8000:return False
+    user32.ReleaseCapture()
+    user32.SendMessageW(handle,0x00A1,2,0)  # WM_NCLBUTTONDOWN / HTCAPTION
+    return True
+
+
 class FloatingAvatar:
     def __init__(self):
         self.host = self.main = self.window = None
@@ -42,7 +50,7 @@ class FloatingAvatar:
             window = self.host.create_window(
                 'NEXUS Floating AI', self.url, width=280, height=290,
                 min_size=(240,250), frameless=True, transparent=True, on_top=True,
-                resizable=False, easy_drag=True, shadow=False, js_api=None,
+                resizable=False, easy_drag=False, shadow=False, js_api=None,
                 background_color='#010203', focus=False,
             )
             if window is None:
@@ -82,6 +90,24 @@ class FloatingAvatar:
         except Exception:
             logging.exception('Floating avatar native transparency unavailable')
             return False
+
+    def can_native_drag(self):
+        return sys.platform=='win32' and self.window is not None and getattr(self.window,'native',None) is not None
+
+    def drag(self):
+        if not self.can_native_drag():raise ValueError('Native avatar dragging requires the Windows floating window.')
+        from System import Action
+        import ctypes
+        window=self.window;form=window.native
+        user32=ctypes.WinDLL('user32',use_last_error=True)
+        user32.GetAsyncKeyState.argtypes=[ctypes.c_int];user32.GetAsyncKeyState.restype=ctypes.c_short
+        user32.ReleaseCapture.argtypes=[];user32.ReleaseCapture.restype=ctypes.c_int
+        user32.SendMessageW.argtypes=[ctypes.c_void_p,ctypes.c_uint,ctypes.c_size_t,ctypes.c_ssize_t]
+        user32.SendMessageW.restype=ctypes.c_ssize_t
+        def begin():
+            if self.window is window:native_move_loop(user32,form.Handle.ToInt64())
+        form.BeginInvoke(Action(begin))
+        return {'requested':True}
 
     def close(self):
         with self.lock:

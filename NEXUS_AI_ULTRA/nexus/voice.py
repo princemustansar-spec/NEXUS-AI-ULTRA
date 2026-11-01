@@ -19,6 +19,11 @@ VOICE_PACKAGES = ('sounddevice', 'faster_whisper', 'uroman', 'speech_recognition
 _WHISPER_CACHE = {}
 
 
+class NoSpeechError(ValueError):
+    """Normal idle/unintelligible capture, distinct from device/network failure."""
+
+
+
 def model_manifest(directory, verify=False):
     directory = Path(directory)
     try:
@@ -115,6 +120,7 @@ def record_audio(sd, device, seconds, stop_event, send, silence_timeout=None, st
     chunks, frames, overflows = [], 0, 0
     target = int(rate * (seconds + start_timeout + .5)) if silence_timeout else int(rate * seconds)
     noise, threshold, speech_start, last_speech = [], .004, None, 0
+    candidate_start = None
     from collections import deque
     preroll = deque(maxlen=max(1, int(rate * .2 / 1024)))
     with sd.InputStream(device=device, samplerate=rate, channels=1, dtype='float32', blocksize=1024) as stream:
@@ -136,11 +142,14 @@ def record_audio(sd, device, seconds, stop_event, send, silence_timeout=None, st
                 if speech_start is None:
                     preroll.append(data.copy())
                     if block_rms > threshold:
-                        speech_start = elapsed
-                        last_speech = elapsed
-                        chunks.extend(preroll)
-                    elif elapsed >= .5 + start_timeout:
-                        raise ValueError('No speech detected before the start timeout. Check input level and try again.')
+                        if candidate_start is None:candidate_start=elapsed-len(data)/rate
+                        if elapsed-candidate_start >= .10:
+                            speech_start = elapsed
+                            last_speech = elapsed
+                            chunks.extend(preroll)
+                    else:candidate_start=None
+                    if speech_start is None and elapsed >= .5 + start_timeout:
+                        raise NoSpeechError('No speech detected before the start timeout. Check input level and try again.')
                 else:
                     chunks.append(data.copy())
                     if block_rms > threshold:
@@ -156,7 +165,7 @@ def record_audio(sd, device, seconds, stop_event, send, silence_timeout=None, st
                 send({'phase': 'listening', 'level_dbfs': round(20 * math.log10(max(rms, 1e-9)), 1), 'seconds': round(frames / rate, 1)})
                 last_meter = now
     if not chunks:
-        raise ValueError('Recording stopped before any audio was captured. Try again and speak after Listening appears.')
+        raise NoSpeechError('Recording stopped before any audio was captured. Try again and speak after Listening appears.')
     audio = np.concatenate(chunks).reshape(-1)
     if not np.isfinite(audio).all():
         raise ValueError('Microphone returned invalid audio. Select another device or update its driver.')
@@ -199,7 +208,7 @@ def transcribe_audio(audio, rate, directory, language, send):
                                       condition_on_previous_text=False, without_timestamps=True)
     text = ' '.join(segment.text.strip() for segment in segments if segment.text.strip()).strip()
     if not text:
-        raise ValueError('No speech was recognized. Check input level, select English or Roman Urdu explicitly, and try a short clear sentence.')
+        raise NoSpeechError('No speech was recognized. Check input level, select English or Roman Urdu explicitly, and try a short clear sentence.')
     result = romanize(text) if language in ('ur', 'auto') else text
     return {'text': result, 'original_text': text, 'detected_language': info.language,
             'romanized': result != text, 'offline': True, 'model': 'Whisper tiny multilingual / CPU INT8',
@@ -230,11 +239,13 @@ def voice_worker(connection, stop_event, operation, options, directory, keep_ope
                     result = {**metrics, 'guidance': 'No input signal: check mute, input selection and Windows microphone privacy.' if metrics['silence'] else 'Input signal detected. Clipping/overflows may require reducing gain or selecting another device.'}
                 else:
                     if metrics['silence']:
-                        raise ValueError('No microphone signal detected. Run Microphone diagnostics and Test input; check mute, device and Windows privacy settings.')
+                        raise NoSpeechError('No microphone signal detected. Run Microphone diagnostics and Test input; check mute, device and Windows privacy settings.')
                     if options.get('engine', 'offline') == 'google':
                         from .voice_online import google_transcribe
                         try:
                             result = google_transcribe(audio, rate, options.get('locale') or ('ur-PK' if options['language']=='ur' else 'en-IN'), options['language']!='en', send)
+                        except NoSpeechError:
+                            raise
                         except Exception as exc:
                             if not model_manifest(directory, verify=True):
                                 raise ValueError('Google recognition failed ('+type(exc).__name__+'). Offline fallback model is not installed. Check connectivity/language or install the tiny model.') from exc
@@ -254,7 +265,9 @@ def voice_worker(connection, stop_event, operation, options, directory, keep_ope
             message = 'Offline model download failed (' + type(exc).__name__ + '). Check Internet access to huggingface.co and its Hugging Face/Xet download hosts, then retry. Existing chat remains available.'
         else:
             message = str(exc)[:450]
-        send({'phase': 'error', 'error': message, 'error_type': type(exc).__name__})
+        error={'phase':'error','error':message,'error_type':type(exc).__name__}
+        if isinstance(exc,NoSpeechError):error['error_code']='no_speech'
+        send(error)
     finally:
         if not keep_open:
             connection.close()
