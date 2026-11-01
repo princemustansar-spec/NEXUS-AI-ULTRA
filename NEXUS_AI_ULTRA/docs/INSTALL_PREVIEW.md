@@ -54,3 +54,18 @@ A small anchored parser handles direct YouTube commands such as `youtube open ka
 A screenshot showing no pending actions cannot establish whether an earlier request was never queued or had expired (existing approvals expire after five minutes); user-side activity logs were unavailable. The direct YouTube path removes this ambiguity for supported commands.
 
 Validation: 117 Python tests passed, including 19 browser-action tests covering actual tool invocation with mocked browser launch, launch failure, no model/paid request, query encoding, negative/noncommand text, disabled tools, Emergency Stop, public-URL validation and retained file approvals. Existing transcript flow and JavaScript syntax checks passed. No real browser was launched on the user's PC during these tests. Use the updated source revision; main remains unmerged.
+
+## Controlled YouTube playback
+
+The native Windows host can now create one reusable NEXUS YouTube WebView2 window. It uses the runtime already required by the desktop app: no new package, bundled Chrome, CDP server, GPU model or browser download. Personal browser tabs are not attached or controlled. Headless mode returns an explicit unsupported error.
+
+Commands (type or transcribe/review/Send):
+- `sad song play karo` or `youtube open karo sad song lagao`: search and select the first standard video result.
+- `jo gana search kiya hin usy play kro`: use the owned search session, or recover the most recent explicit YouTube query and open it in NEXUS's window.
+- `pause karo`, `resume karo`, `next song play karo` / `agla gana chalao`.
+
+Generic media commands use the validated youtube_player tool. Simple supported commands also have a direct local route without model/paid inference. Tool disablement and Emergency Stop remain enforced. Main-window close shuts down its media window; Emergency Stop closes it. Only the controlled youtube.com window receives playback scripts, with js_api=None; query strings are URL-encoded instead of interpolated into JavaScript.
+
+Success is based on observed video state (not paused/ended, ready media, advancing playback time). Next additionally requires a changed video. Ads, missing Next controls, blocked autoplay, consent/sign-in pages, network failure, unsupported DOM changes and absent native sessions return blocked/error results rather than invented success. If YouTube requires consent or a first manual Play, handle it in the visible NEXUS YouTube window and retry. No ad/captcha/sign-in bypass is implemented.
+
+Validation: 136 Python tests passed for parser/controller/application routing, previous search recovery, no inference call, disabled tools, Emergency Stop, native-host reuse/cleanup, stalled playback, ads/external pages and stale Next results. Production DOM scripts passed against locally intercepted YouTube-shaped pages with a real HTML media element: result click, advancing playback time, pause, resume and next video. Existing voice transcript/Enter keyboard browser tests passed; Python compilation and JS syntax passed. No live YouTube request or Windows WebView2 media test was performed; actual device RAM/playback performance is unmeasured. Existing source updates still use START_UPDATED_NEXUS.bat, not a retained old portable EXE.

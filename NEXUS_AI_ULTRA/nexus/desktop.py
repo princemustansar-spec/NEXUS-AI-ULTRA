@@ -80,7 +80,7 @@ class LocalBackend:
                 response = connection.getresponse()
                 if response.status == 200:
                     state = json.loads(response.read())
-                    if state.get('monitor', {}).get('pid') == os.getpid() and len(state.get('tools', [])) == 18:
+                    if state.get('monitor', {}).get('pid') == os.getpid() and len(state.get('tools', [])) >= 18:
                         return state
             except (OSError, ValueError, http.client.HTTPException):
                 pass
@@ -127,6 +127,10 @@ def run_desktop(backend, webview):
         )
         if window is None:
             raise RuntimeError('Could not create the NEXUS desktop window.')
+        from .youtube import player
+        player.attach(webview)
+        if hasattr(window, 'events'):
+            window.events.closed += lambda: player.attach(None)
         webview.start(
             gui='edgechromium', debug=False, http_server=False,
             private_mode=False, storage_path=str(backend.data_dir / 'webview'),
@@ -134,4 +138,6 @@ def run_desktop(backend, webview):
     except Exception as exc:
         raise RuntimeError('Desktop startup failed. Install Microsoft Edge WebView2 Evergreen Runtime if needed. ' + str(exc)) from exc
     finally:
+        from .youtube import player
+        player.attach(None)
         backend.close()

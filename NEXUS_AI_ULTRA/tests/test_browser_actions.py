@@ -37,7 +37,7 @@ def browser_client(tmp_path,monkeypatch):
 
 def test_youtube_executes_without_approval_and_reports_request_only(browser_client):
     client,app,opened=browser_client
-    response=client.post('/api/chat',json={'text':'youtube open karo sad song lagao'})
+    response=client.post('/api/chat',json={'text':'youtube open karo sad song'})
     assert response.status_code==200
     assert 'request' in response.json()['text'] and 'Play karein' in response.json()['text']
     assert response.json()['provider']=='NEXUS browser'

@@ -23,6 +23,7 @@ CATALOG = {
  'open_folder': ('Open an approved folder', True, {'path':'string'}),
  'web_search': ('Open a web search in the default browser automatically; no extra approval', False, {'query':'string'}),
  'open_url': ('Open an HTTPS public URL in the default browser automatically; no extra approval', False, {'url':'string'}),
+ 'youtube_player': ('Search/play/pause/resume/next inside the NEXUS-controlled YouTube window; returns observed media state', False, {'action':'string','query':'string'}),
  'whatsapp_draft': ('Open a WhatsApp draft; user must manually send', True, {'phone':'string','message':'string'}),
  'screenshot': ('Capture the desktop to an approved PNG path', True, {'path':'string'}),
  'reminder': ('Create a persistent reminder with an ISO timestamp including timezone', True, {'title':'string','due':'string'}),
@@ -90,6 +91,12 @@ class Tools:
         expected = CATALOG[name][2]
         if set(args) != set(expected) or any(not isinstance(v, str) for v in args.values()):
             raise ValueError('Tool arguments do not match the schema')
+        if name == 'youtube_player':
+            from .youtube import player
+            result = player.command(args['action'], args['query'])
+            if args['query'].strip() and result.get('status') in ('search_ready','playing'):
+                self.store.set('last_youtube_query',args['query'].strip())
+            return result
         if name in ('system_info','maintenance_report'):
             return self.monitor()
         if name == 'processes':
