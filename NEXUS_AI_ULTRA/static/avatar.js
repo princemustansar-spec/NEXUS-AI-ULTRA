@@ -11,7 +11,7 @@
  $('motion').onclick=()=>{const values=['system','on','off'],p=localStorage.getItem('core-motion')||'system';localStorage.setItem('core-motion',values[(values.indexOf(p)+1)%3]);motionLabel();};
  media.addEventListener('change',motionLabel);addEventListener('storage',motionLabel);motionLabel();
  async function action(name){try{if(!token)return;const r=await fetch('/api/avatar/'+name,{method:'POST',headers:{'X-Nexus-Token':token}});if(!r.ok){const data=await r.json();throw Error(data.detail||'Action unavailable');}}catch(e){$('detail').textContent=e.message;}}
- document.querySelectorAll('.pywebview-drag-region').forEach(region=>region.addEventListener('mousedown',event=>{if(event.button!==0||dragMode!=='native'||!token)return;event.preventDefault();event.stopImmediatePropagation();action('drag');},true));
+ document.querySelectorAll('.pywebview-drag-region').forEach(region=>region.addEventListener('pointerdown',event=>{if(event.button!==0||dragMode!=='native'||!token)return;event.preventDefault();event.stopImmediatePropagation();action('drag');},true));
  $('mic').onclick=async()=>{try{if(!token)return;const r=await fetch('/api/handsfree/'+(autoVoice?'stop':'start'),{method:'POST',headers:{'Content-Type':'application/json','X-Nexus-Token':token},body:JSON.stringify({consent:true,online_consent:true})});const data=await r.json();if(!r.ok)throw Error(data.detail||'Auto voice unavailable');autoVoice=data.active;poll();}catch(e){$('phase').textContent='VOICE ERROR';$('phase').style.display='block';$('phase').title=e.message;}};
  document.querySelectorAll('button').forEach(button=>button.addEventListener('pointerup',()=>setTimeout(()=>button.blur(),0)));
  $('close').onclick=()=>action('close');$('dashboard').onclick=()=>action('dashboard');
