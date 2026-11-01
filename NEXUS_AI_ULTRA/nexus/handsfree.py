@@ -35,10 +35,10 @@ class HandsFree:
         return {'active':self.running, 'phase':('approval' if self.confirmation and self.phase!='speaking' else self.phase),
                 'awaiting':self.confirmation.get('kind') if self.confirmation else None, 'error':self.error}
 
-    async def start(self, consent=False, online_consent=False, allow_online_tts=False):
+    async def start(self, consent=False, online_consent=False, allow_online_tts=False, unmute=False):
         if consent is not True:raise ValueError('Consent to continuous microphone capture and automatic transcript submission is required.')
         if self.emergency():raise ValueError('Emergency Stop active. Resume in Safety Center.')
-        if self.store.get('voice_muted',False):raise ValueError('Voice is muted. Unmute before starting auto voice.')
+        if self.store.get('voice_muted',False) and unmute is not True:raise ValueError('Voice is muted. Unmute before starting auto voice.')
         if self.running:return self.status()
         settings={**{'device':None,'language':'ur','seconds':8,'engine':'google','locale':'auto','silence_timeout':.8,'start_timeout':5},**self.store.get('voice_settings',{})}
         if settings['engine']=='google' and online_consent is not True:
@@ -51,6 +51,8 @@ class HandsFree:
         settings['silence_timeout']=settings.get('silence_timeout') or .8
         self.options={k:settings[k] for k in ('device','language','seconds','engine','locale','silence_timeout','start_timeout')}
         self.options['allow_online_tts']=allow_online_tts is True
+        # Only an explicit mic click may clear saved mute, after every start precondition passes.
+        if unmute is True:self.store.set('voice_muted',False)
         self.error=None;self.failures=0;self.confirmation=None;self.running=True;self.phase='starting'
         self.task=asyncio.create_task(self._run(),name='NEXUS-auto-voice')
         return self.status()

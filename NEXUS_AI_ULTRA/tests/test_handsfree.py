@@ -185,3 +185,29 @@ def test_capture_fault_pauses_visually_without_timer_driven_complaints(fast):
     assert hf.phase=='error' and not hf.running
     assert hf.tts.spoken==[]
     assert hf.voice.cancelled==1
+
+
+def test_explicit_mic_click_unmutes_and_starts_but_normal_start_respects_mute(fast):
+    hf,events=build([],Mock())
+    hf.store.settings['voice_muted']=True
+    hf.store.set=lambda key,value:hf.store.settings.__setitem__(key,value)
+    async def run():
+        with pytest.raises(ValueError,match='muted'):await hf.start(True,True)
+        assert hf.store.settings['voice_muted'] is True and not hf.running
+        await hf.start(True,True,unmute=True)
+        assert hf.store.settings['voice_muted'] is False and hf.running
+        await hf.stop()
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('fault',['consent','online','emergency','busy'])
+def test_failed_explicit_start_preserves_saved_mute(fast,fault):
+    hf,events=build([],Mock());hf.store.settings['voice_muted']=True
+    hf.store.set=Mock(side_effect=lambda key,value:hf.store.settings.__setitem__(key,value))
+    if fault=='emergency':hf.emergency=lambda:True
+    if fault=='busy':hf.voice.phase='transcribing'
+    async def run():
+        with pytest.raises(ValueError):await hf.start(fault!='consent',fault!='online',unmute=True)
+    asyncio.run(run())
+    assert hf.store.settings['voice_muted'] is True and not hf.running
+    hf.store.set.assert_not_called()

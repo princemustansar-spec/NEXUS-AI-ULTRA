@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
  const $=id=>document.getElementById(id),canvas=$('avatar');
- let token='',dragMode='bridge',autoVoice=false,polling=false,phase='idle',signal=0,pollTimer=0,frame=0,last=0,disposed=false;
+ let token='',dragMode='bridge',autoVoice=false,micBusy=false,polling=false,phase='idle',signal=0,pollTimer=0,frame=0,last=0,disposed=false;
  const shell=document.querySelector('.avatar-shell');let controlsTimer=0;
  shell.addEventListener('pointerenter',()=>{clearTimeout(controlsTimer);shell.classList.add('controls-open');});
  shell.addEventListener('pointerleave',()=>{clearTimeout(controlsTimer);controlsTimer=setTimeout(()=>shell.classList.remove('controls-open'),600);});
@@ -12,11 +12,11 @@
  media.addEventListener('change',motionLabel);addEventListener('storage',motionLabel);motionLabel();
  async function action(name){try{if(!token)return;const r=await fetch('/api/avatar/'+name,{method:'POST',headers:{'X-Nexus-Token':token}});if(!r.ok){const data=await r.json();throw Error(data.detail||'Action unavailable');}}catch(e){$('detail').textContent=e.message;}}
  document.querySelectorAll('.pywebview-drag-region').forEach(region=>region.addEventListener('pointerdown',event=>{if(event.button!==0||dragMode!=='native'||!token)return;event.preventDefault();event.stopImmediatePropagation();action('drag');},true));
- $('mic').onclick=async()=>{try{if(!token)return;const r=await fetch('/api/handsfree/'+(autoVoice?'stop':'start'),{method:'POST',headers:{'Content-Type':'application/json','X-Nexus-Token':token},body:JSON.stringify({consent:true,online_consent:true})});const data=await r.json();if(!r.ok)throw Error(data.detail||'Auto voice unavailable');autoVoice=data.active;poll();}catch(e){$('phase').textContent='VOICE ERROR';$('phase').style.display='block';$('phase').title=e.message;}};
+ $('mic').onclick=async()=>{if(micBusy||!token)return;micBusy=true;$('mic').disabled=true;try{const r=await fetch('/api/handsfree/'+(autoVoice?'stop':'start'),{method:'POST',headers:{'Content-Type':'application/json','X-Nexus-Token':token},body:JSON.stringify({consent:true,online_consent:true,...(!autoVoice?{unmute:true}:{})})});const data=await r.json();if(!r.ok)throw Error(data.detail||'Auto voice unavailable');autoVoice=data.active;poll();}catch(e){$('phase').textContent='VOICE ERROR';$('phase').style.display='block';$('phase').title=e.message;}finally{micBusy=false;$('mic').disabled=false;}};
  document.querySelectorAll('button').forEach(button=>button.addEventListener('pointerup',()=>setTimeout(()=>button.blur(),0)));
  $('close').onclick=()=>action('close');$('dashboard').onclick=()=>action('dashboard');
  function status(data){
-  token=data.token;dragMode=data.drag_mode||'bridge';const voice=data.voice||{},tts=data.tts||{},hf=data.handsfree||{};autoVoice=!!hf.active;$('mic').dataset.active=String(autoVoice);$('mic').setAttribute('aria-label',autoVoice?'Pause auto voice':'Start auto voice');$('mic').title=autoVoice?'Auto voice ON — capture pauses while speaking; click to pause':'Start auto voice — Google mode sends clips online';
+  token=data.token;dragMode=data.drag_mode||'bridge';const voice=data.voice||{},tts=data.tts||{},hf=data.handsfree||{};autoVoice=!!hf.active;$('mic').dataset.active=String(autoVoice);$('mic').setAttribute('aria-label',autoVoice?'Pause auto voice':data.voice_muted?'Unmute and start auto voice':'Start auto voice');$('mic').title=autoVoice?'Auto voice ON — capture pauses while speaking; click to pause':data.voice_muted?'Unmute and start auto voice — Google mode sends clips online':'Start auto voice — Google mode sends clips online';
   phase=data.emergency?'emergency':hf.phase==='error'?'error':hf.active?(hf.phase==='approval'?'approval':hf.phase==='speaking'?'speaking':hf.phase==='thinking'?'thinking':voice.phase==='calibrating'?'calibrating':'listening'):voice.phase==='error'?'error':['calibrating','listening'].includes(voice.phase)?voice.phase:voice.phase==='transcribing'||data.thinking?'thinking':tts.phase==='speaking'?'speaking':'idle';
   signal=phase==='listening'&&Number.isFinite(voice.level_dbfs)?Math.max(0,Math.min(1,(voice.level_dbfs+60)/45)):0;
   const labels={idle:'READY',calibrating:'CALIBRATING',listening:'LISTENING',thinking:'THINKING',speaking:'SPEAKING',error:'VOICE ERROR',approval:'APPROVAL',emergency:'STOPPED'};

@@ -133,7 +133,7 @@ async def update_desktop_shortcut():
 def avatar_status():
     # Compact local telemetry: no chat history, memory, keys or system monitoring.
     v, t = voice.status(), tts.status()
-    return dict(token=session_token, available=avatar.available(), drag_mode='native' if avatar.can_native_drag() else 'bridge',
+    return dict(token=session_token, available=avatar.available(), drag_mode='native' if avatar.can_native_drag() else 'bridge', voice_muted=store.get('voice_muted',False),
                 voice={k:v[k] for k in ('phase','level_dbfs') if k in v},
                 tts={'phase':t.get('phase','idle')}, handsfree=handsfree.status(), thinking=chat_lock.locked(), emergency=emergency)
 
@@ -155,7 +155,9 @@ async def handsfree_action(action: str, request: Request):
     if avatar.window is None:raise ValueError('Open Floating AI before starting auto voice.')
     b=await request.json()
     online_tts=b.get('allow_online_tts',store.get('handsfree_online_tts',False)) is True
-    result=await handsfree.start(b.get('consent'),b.get('online_consent'),online_tts)
+    if b.get('unmute') is True:
+        result=await handsfree.start(b.get('consent'),b.get('online_consent'),online_tts,unmute=True)
+    else:result=await handsfree.start(b.get('consent'),b.get('online_consent'),online_tts)
     if 'allow_online_tts' in b:store.set('handsfree_online_tts',online_tts)
     return result
 
