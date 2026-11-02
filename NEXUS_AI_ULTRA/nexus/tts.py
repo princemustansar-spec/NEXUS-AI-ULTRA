@@ -74,9 +74,15 @@ def windows_speak(text, stop, preferred_voice=''):
 def speak_reply(text, allow_online, stop, send, preferred_voice=''):
     provider='windows'
     fallback=None
+    if not allow_online:
+        if not stop.is_set():
+            send({'phase':'speaking','message':'Using an allowed installed Windows SAPI voice.'})
+            windows_speak(' '.join(chunks(text)),stop,preferred_voice)
+        return {'provider':'windows','fallback_reason':None,'cancelled':stop.is_set()}
+    online_available=True
     for chunk in chunks(text):
         if stop.is_set():break
-        if allow_online:
+        if online_available:
             try:
                 send({'phase':'speaking','message':'Edge TTS: '+EDGE_VOICE+' (reply text sent to Microsoft).'})
                 audio=asyncio.run(edge_audio(chunk))
@@ -86,6 +92,7 @@ def speak_reply(text, allow_online, stop, send, preferred_voice=''):
                 continue
             except Exception as exc:
                 fallback=type(exc).__name__
+                online_available=False
         if stop.is_set():break
         send({'phase':'speaking','message':'Using an allowed installed Windows SAPI voice.'})
         windows_speak(chunk,stop,preferred_voice)

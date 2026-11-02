@@ -94,6 +94,12 @@ def main():
                 deadline=time.monotonic()+3
                 while not handsfree.running and time.monotonic()<deadline:time.sleep(.1)
                 assert handsfree.running and store.get('voice_muted') is False,'Explicit floating mic click must unmute and start'
+                handsfree.phase='speaking'
+                deadline=time.monotonic()+3
+                while window.evaluate_js("document.querySelector('#interrupt').disabled") and time.monotonic()<deadline:time.sleep(.1)
+                click_button('interrupt')
+                assert handsfree.interrupt_event.is_set(),'Native Stop & listen must dispatch interruption without stopping auto voice'
+                handsfree.phase='listening'
                 click_button('mic')
                 deadline=time.monotonic()+3
                 while handsfree.running and time.monotonic()<deadline:time.sleep(.1)
