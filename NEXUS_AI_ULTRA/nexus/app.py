@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import secrets
+import httpx
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -161,6 +162,59 @@ async def handsfree_action(action: str, request: Request):
     if 'allow_online_tts' in b:store.set('handsfree_online_tts',online_tts)
     return result
 
+
+
+@app.get('/api/accounts/status')
+def accounts_status():
+    return {**providers.accounts.status(),'verified':store.get('account_verified',{})}
+
+
+@app.post('/api/accounts/{account}/{action}')
+async def account_action(account: str, action: str, request: Request):
+    from . import chatgpt_signin as login
+    if account not in ('chatgpt','claude'):raise ValueError('Unknown account')
+    b=await request.json();ident=account+'-account';accounts=providers.accounts
+    try:
+        if action=='login':
+            if b.get('consent') is not True:raise ValueError('Confirm opening the official sign-in flow.')
+            accounts.disable(ident)
+            verified=store.get('account_verified',{});verified[ident]=False;store.set('account_verified',verified)
+            return await asyncio.to_thread(login.start_login if account=='chatgpt' else accounts.claude.login)
+        if action=='check':
+            return await asyncio.to_thread(login.status) if account=='chatgpt' else await accounts.claude.check()
+        if action=='models' and account=='chatgpt':return {'models':await asyncio.to_thread(login.models)}
+        if action=='model' and account=='chatgpt':
+            result=await asyncio.to_thread(login.select_model,str(b.get('model','')))
+            if not result.get('ok'):raise ValueError(result.get('error','Model unavailable'))
+            verified=store.get('account_verified',{});verified[ident]=False;store.set('account_verified',verified)
+            return result
+        if action=='test':
+            if emergency:raise ValueError('Emergency Stop active')
+            if b.get('consent') is not True:raise ValueError('Confirm this test uses your account plan limits or credits.')
+            messages=[{'role':'user','content':'Reply with a short connection test acknowledgement. Do not call tools.'}]
+            if account=='chatgpt':
+                result=await asyncio.to_thread(login.request_chatgpt,messages)
+                text=result['choices'][0]['message'].get('content','')
+            else:
+                msg,_=await accounts.claude.request(messages);text=msg.get('content','')
+            if not text:raise ValueError('Connection returned no text; not verified.')
+            verified=store.get('account_verified',{});verified[ident]=True;store.set('account_verified',verified)
+            return {'verified':True,'text':str(text)[:300]}
+        if action=='enable':
+            if b.get('consent') is not True:raise ValueError('Confirm using this account for chat and voice requests.')
+            if not store.get('account_verified',{}).get(ident):raise ValueError('Run a successful connection test first.')
+            values=store.get('account_providers',{});values[ident]=True;store.set('account_providers',values)
+            store.set('preferred_provider',ident)
+            return {'enabled':True,'preferred_provider':ident}
+        if action=='disable':
+            accounts.disable(ident);return {'enabled':False}
+        if action=='disconnect' and account=='chatgpt':
+            accounts.disable(ident)
+            verified=store.get('account_verified',{});verified[ident]=False;store.set('account_verified',verified)
+            return await asyncio.to_thread(login.disconnect)
+        raise ValueError('Unknown account action')
+    except (RuntimeError,httpx.HTTPError) as exc:
+        raise ValueError(str(exc)[:180] if isinstance(exc,RuntimeError) else 'Account service unavailable. Check your connection and retry.') from None
 
 @app.post('/api/providers/{ident}/connect')
 async def connect_provider(ident: str, request: Request):

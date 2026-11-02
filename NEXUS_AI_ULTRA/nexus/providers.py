@@ -17,6 +17,8 @@ DEFAULTS = [
 class Providers:
     def __init__(self, store):
         self.store = store
+        from .account_providers import AccountProviders
+        self.accounts=AccountProviders(store)
         self.status = {}
         self.cooldowns = {}
         self.discovery = {}
@@ -50,6 +52,11 @@ class Providers:
         return dict(mode='AUTO', active=self.active, providers=self.status)
 
     async def discover(self, p, force=False):
+        if p.get('kind')=='account':
+            try:result=dict(connected=True,models=await self.accounts.models(p['id']),error=None)
+            except Exception as exc:result=dict(connected=False,models=[],error=str(exc)[:180])
+            self.status[p['id']]=result
+            return result
         cache_key = (p['id'], p['base'])
         async with self.discovery_lock:
             cached = self.discovery.get(cache_key)
@@ -112,7 +119,7 @@ class Providers:
         return p
 
     def configs(self):
-        return [self.normalize({**p, 'base': self.endpoints.get(p['id'], p['base'])}) for p in self.store.get('providers', DEFAULTS)]
+        return [self.normalize({**p, 'base': self.endpoints.get(p['id'], p['base'])}) for p in self.store.get('providers', DEFAULTS)] + self.accounts.configs()
 
     def key(self, ident):
         value = os.getenv('NEXUS_KEY_' + ident.upper().replace('-', '_'))
@@ -126,6 +133,7 @@ class Providers:
     def save(self, configs):
         clean = []
         for p in configs:
+            if p.get('id') in ('chatgpt-account','claude-account') or p.get('kind')=='account':continue
             p = self.normalize(p)
             ident = p['id']
             if not ident.replace('-', '').replace('_', '').isalnum():
@@ -172,6 +180,18 @@ class Providers:
     async def request(self, messages, tools=None, allow_paid=False):
         errors = []
         preferred = self.store.get('preferred_provider', '')
+        if preferred in ('chatgpt-account','claude-account'):
+            self.active=None
+            try:
+                async with asyncio.timeout(45):msg,model=await self.accounts.request(preferred,messages,tools)
+                name=next(p['name'] for p in self.accounts.configs() if p['id']==preferred)
+                self.active=dict(provider=name,provider_id=preferred,model=model)
+                self.status[preferred]=dict(connected=True,models=[model],error=None)
+                return msg,name,model
+            except asyncio.CancelledError:raise
+            except Exception as exc:
+                self.status[preferred]=dict(connected=False,models=[],error=str(exc)[:180])
+                raise ValueError(str(exc)[:180]) from None
         configs = sorted(self.configs(), key=lambda p: (
             p['id'] != preferred if preferred else not p['id'].startswith('freellm'),
             0 if p['id'].startswith('freellm') else 1 if p['id'] in ('gemini', 'groq') else 2))
@@ -181,6 +201,7 @@ class Providers:
             async with asyncio.timeout(45):
                 async with httpx.AsyncClient(timeout=httpx.Timeout(6, connect=3), follow_redirects=False) as c:
                     for p in configs:
+                        if p.get('kind')=='account':continue
                         if not p['enabled']:
                             continue
                         if p['paid'] and not allow_paid:
@@ -253,6 +274,7 @@ class Providers:
         p = next((p for p in self.configs() if p['id'] == ident and p['enabled']), None)
         if not p:
             raise ValueError('Select an enabled compatible image provider.')
+        if p.get('kind')=='account':raise ValueError('Account connections support chat and tools; select an image API provider.')
         if p['paid'] and not allow_paid:
             raise ValueError('Paid image requests require approval.')
         async with httpx.AsyncClient(timeout=90, follow_redirects=False) as c:
