@@ -17,7 +17,28 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit, parse_qs
 
-import httpx as requests
+import httpx
+
+
+class PooledHTTP:
+    """Thread-safe keep-alive transport; bearer credentials are passed per request."""
+    def __init__(self):self.client=None;self.lock=threading.Lock()
+    def get_client(self):
+        with self.lock:
+            if self.client is None or self.client.is_closed:
+                self.client=httpx.Client(follow_redirects=False,limits=httpx.Limits(max_connections=4,max_keepalive_connections=2,keepalive_expiry=60))
+            return self.client
+    def __getattr__(self,name):
+        def call(*args,**kwargs):
+            if isinstance(kwargs.get('timeout'),(int,float)):kwargs['timeout']=httpx.Timeout(kwargs['timeout'],connect=5)
+            return getattr(self.get_client(),name)(*args,**kwargs)
+        return call
+    def close(self):
+        with self.lock:
+            if self.client:self.client.close();self.client=None
+
+
+requests=PooledHTTP()
 
 AUTH = "https://auth.openai.com"
 API = "https://api.openai.com/v1"

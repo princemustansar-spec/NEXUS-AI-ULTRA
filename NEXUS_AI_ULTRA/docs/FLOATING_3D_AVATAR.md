@@ -1,3 +1,5 @@
+Current voice latency and interruption behavior: see [VOICE_LATENCY_AND_INTERRUPTION.md](VOICE_LATENCY_AND_INTERRUPTION.md). Auto voice can now listen during replies; the older half-duplex notes below describe the previous behavior.
+
 # Figure-only floating AI with auto voice
 
 Install this source revision, close previous NEXUS windows, then run **START_FLOATING_NEXUS.bat** from the existing installation. It starts the native app with the dashboard hidden, opens the optional transparent robot/rings window and explicitly enables the auto-voice session. It does not register a Windows login task or change the existing normal launcher. START_UPDATED_NEXUS.bat still opens the normal dashboard; its Floating AI button opens the companion and starts auto voice.

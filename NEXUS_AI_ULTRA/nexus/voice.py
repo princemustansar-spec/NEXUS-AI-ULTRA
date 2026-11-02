@@ -17,6 +17,7 @@ MODEL_NAME = 'tiny'
 MAX_SECONDS = 15
 VOICE_PACKAGES = ('sounddevice', 'faster_whisper', 'uroman', 'speech_recognition')
 _WHISPER_CACHE = {}
+_ROMANIZER = None
 
 
 class NoSpeechError(ValueError):
@@ -110,7 +111,7 @@ def enumerate_inputs(sd):
             'guidance': 'Windows Settings > Privacy & security > Microphone: enable microphone access and Let desktop apps access your microphone. Enumeration alone does not prove permission.'}
 
 
-def record_audio(sd, device, seconds, stop_event, send, silence_timeout=None, start_timeout=5):
+def record_audio(sd, device, seconds, stop_event, send, silence_timeout=None, start_timeout=5, calibration_seconds=.5):
     import numpy as np
     info = sd.query_devices(device, 'input')
     rate = int(info['default_samplerate'])
@@ -118,7 +119,7 @@ def record_audio(sd, device, seconds, stop_event, send, silence_timeout=None, st
         raise ValueError('Microphone reports an unsupported sample rate. Select another input device.')
     sd.check_input_settings(device=device, channels=1, samplerate=rate, dtype='float32')
     chunks, frames, overflows = [], 0, 0
-    target = int(rate * (seconds + start_timeout + .5)) if silence_timeout else int(rate * seconds)
+    target = int(rate * (seconds + start_timeout + calibration_seconds)) if silence_timeout else int(rate * seconds)
     noise, threshold, speech_start, last_speech = [], .004, None, 0
     candidate_start = None
     from collections import deque
@@ -132,7 +133,7 @@ def record_audio(sd, device, seconds, stop_event, send, silence_timeout=None, st
             elapsed = frames / rate
             block_rms = float(np.sqrt(np.mean(np.square(data)))) if data.size else 0
             if silence_timeout:
-                if elapsed <= .5:
+                if elapsed <= calibration_seconds:
                     noise.append(block_rms)
                     continue
                 if noise:
@@ -148,7 +149,7 @@ def record_audio(sd, device, seconds, stop_event, send, silence_timeout=None, st
                             last_speech = elapsed
                             chunks.extend(preroll)
                     else:candidate_start=None
-                    if speech_start is None and elapsed >= .5 + start_timeout:
+                    if speech_start is None and elapsed >= calibration_seconds + start_timeout:
                         raise NoSpeechError('No speech detected before the start timeout. Check input level and try again.')
                 else:
                     chunks.append(data.copy())
@@ -181,8 +182,11 @@ def romanize(text):
     # Keep the original Urdu transcript in the response for correction/review.
     if not re.search(r'[\u0600-\u06ff\u0900-\u097f]', text):
         return text
-    from uroman import Uroman
-    return Uroman().romanize_string(text, lcode='urd')
+    global _ROMANIZER
+    if _ROMANIZER is None:
+        from uroman import Uroman
+        _ROMANIZER=Uroman()
+    return _ROMANIZER.romanize_string(text, lcode='urd')
 
 
 def transcribe_audio(audio, rate, directory, language, send):
@@ -234,8 +238,11 @@ def voice_worker(connection, stop_event, operation, options, directory, keep_ope
                 if operation == 'capture' and options.get('engine', 'offline') == 'offline' and not model_manifest(directory, verify=True):
                     raise ValueError('Verified offline model not installed. Run Install offline model in Voice Assistant first.')
                 audio, rate, metrics = record_audio(sd, options['device'], options['seconds'], stop_event, send,
-                    options.get('silence_timeout') if operation == 'capture' else None, options.get('start_timeout', 5))
-                if operation == 'test':
+                    options.get('silence_timeout') if operation == 'capture' else None, options.get('start_timeout', 5),
+                    0 if options.get('discard_on_stop') else .5)
+                if options.get('discard_on_stop') and stop_event.is_set():
+                    result={'no_speech':True,'diagnostics':metrics}
+                elif operation == 'test':
                     result = {**metrics, 'guidance': 'No input signal: check mute, input selection and Windows microphone privacy.' if metrics['silence'] else 'Input signal detected. Clipping/overflows may require reducing gain or selecting another device.'}
                 else:
                     if metrics['silence']:
@@ -363,7 +370,7 @@ class VoiceService:
                     'model_ready': model_manifest(self.directory) is not None,
                     'model_directory': str(self.directory), 'offline_recognition': True, 'max_seconds': MAX_SECONDS}
 
-    def start(self, operation, *, device=None, language='en', seconds=10, engine='offline', locale='en-IN', silence_timeout=None, start_timeout=5, text='', allow_online=False, preferred_voice=''):
+    def start(self, operation, *, device=None, language='en', seconds=10, engine='offline', locale='en-IN', silence_timeout=None, start_timeout=5, text='', allow_online=False, preferred_voice='', discard_on_stop=False):
         if operation not in ('capture', 'diagnostics', 'test', 'model', 'tts'):
             raise ValueError('Unsupported voice operation')
         if language not in ('en', 'ur', 'auto'):
@@ -383,7 +390,7 @@ class VoiceService:
         if not isinstance(preferred_voice,str) or len(preferred_voice)>150 or re.search('asad|uzma',preferred_voice,re.I):
             raise ValueError('Choose a voice other than Asad/Uzma.')
         options = {'device':device,'language':language,'seconds':seconds,'engine':engine,'locale':locale,
-                   'silence_timeout':silence_timeout,'start_timeout':start_timeout,'text':text,'allow_online':allow_online,'preferred_voice':preferred_voice}
+                   'silence_timeout':silence_timeout,'start_timeout':start_timeout,'text':text,'allow_online':allow_online,'preferred_voice':preferred_voice,'discard_on_stop':discard_on_stop is True}
         with self.lock:
             self._collect()
             if self.process and self.commands and operation == 'capture' and self.state.get('operation') == 'capture' and self.state['phase'] in ('done','error'):
