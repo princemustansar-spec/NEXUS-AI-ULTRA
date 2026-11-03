@@ -131,7 +131,14 @@ class WhatsApp:
                 stable=stable+1 if valid and identity==previous else 0;previous=identity
                 if valid and stable>=2:break
                 self.sleep(.2)
-            else:return {'status':'blocked','sent':False,'reason':'Could not verify a stable chat identity. Open the exact chat with existing history and retry; no message was sent.'}
+            else:
+                checks=state.get('verification',{})
+                failures=[]
+                if not state.get('recipient'):failures.append('chat header not found')
+                elif not is_phone and name_key(state['recipient'])!=name_key(contact):failures.append('open chat name does not match the requested contact')
+                if not state.get('recipient_id'):failures.append('chat identifier missing or ambiguous')
+                if state.get('composer') is None:failures.append('unique message input not found')
+                return {'status':'blocked','sent':False,'reason':'WhatsApp verification failed: '+', '.join(failures or ['chat did not become stable'])+'. No message was sent. Use Check WhatsApp / send status in WhatsApp Center for verification details.','verification':checks}
             for old_id,old in self.drafts.items():
                 if old['recipient_id']==state['recipient_id'] and old['message']==message and old['state'] not in ('prepared','cancelled','blocked'):
                     return {'status':'already_attempted','draft_id':old_id,'sent':old.get('receipt',{}).get('sent'),'retry_allowed':False,'message':'This message already has a send attempt. Check its status; do not resend automatically.'}
@@ -211,7 +218,7 @@ class WhatsApp:
                     except ValueError:pass
                 return {**draft.get('receipt',{'status':draft['state'],'sent':False}),'draft_id':ident,'retry_allowed':False}
             if self.window is None:return {'status':'closed','available':self.host is not None,'sent':False}
-            try:state=self._call('state');return {k:state[k] for k in ('status','reason','recipient') if k in state}
+            try:state=self._call('state');return {k:state[k] for k in ('status','reason','recipient','verification') if k in state}
             except ValueError:return {'status':'loading','message':'Check the NEXUS WhatsApp window.'}
 
 

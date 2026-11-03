@@ -10,17 +10,28 @@ function nexusWhatsApp(payload){
  let session=window.__nexusWhatsAppSession;
  if(!session||session.side!==side){session={side,id:crypto.randomUUID()};Object.defineProperty(window,'__nexusWhatsAppSession',{value:session,writable:true,configurable:true});}
  const main=document.querySelector('#main');
- const composer=()=>{const els=[...document.querySelectorAll('#main footer [contenteditable="true"][role="textbox"], #main footer [data-testid="conversation-compose-box-input"]')].filter(visible);return els.length===1?els[0]:null;};
+ // Test IDs can be on wrappers around the actual editable element.
+ const inputs=(root,selector)=>[...new Set([...(root?.querySelectorAll(selector)||[])].flatMap(e=>e.matches('input,[contenteditable="true"]')?[e]:[...e.querySelectorAll('input[type="text"],[contenteditable="true"]')]))].filter(visible);
+ const composers=()=>inputs(main?.querySelector('footer'),'[contenteditable="true"][role="textbox"],[data-testid="conversation-compose-box-input"]');
+ const composer=()=>{const els=composers();return els.length===1?els[0]:null;};
  const textOf=e=>norm(e?.innerText||e?.textContent||'');
+ const messageId=e=>{
+  const quoted='[data-testid*="quoted"],[data-testid*="reply-preview"]';
+  const candidates=[e,e.closest('[data-id]'),...e.querySelectorAll('[data-id]')].filter(n=>n&&!n.closest(quoted)&&/^(true|false)_/.test(n.getAttribute('data-id')||''));
+  // Only the outer message ID belongs to this bubble; quoted IDs are not identities.
+  const outer=candidates.filter(n=>!candidates.some(other=>other!==n&&other.contains(n)));
+  const ids=[...new Set(outer.map(n=>n.getAttribute('data-id')))];return ids.length===1?ids[0]:'';
+ };
  const identity=()=>{
-  const title=main?.querySelector('header span[title][dir="auto"], header [data-testid="conversation-info-header-chat-title"], header span[title]');
+  const title=main?.querySelector('header [data-testid="conversation-info-header-chat-title"]')||main?.querySelector('header span[title][dir="auto"]')||main?.querySelector('header span[title]');
   const titleText=norm(title?.getAttribute('title')||textOf(title));
-  const ids=new Set();for(const e of main?.querySelectorAll('.message-in,.message-out')||[]){const raw=e.getAttribute('data-id')||e.closest('[data-id]')?.getAttribute('data-id')||'';const m=raw.match(/(?:^|_)(\d+(?:-\d+)?@(?:c\.us|s\.whatsapp\.net|g\.us|lid))/);if(m)ids.add(m[1]);}
+  const rows=[...(main?.querySelectorAll('.message-in,.message-out')||[])];
+  const ids=new Set();let identified=0;for(const e of rows){const m=messageId(e).match(/^(?:true|false)_(\d+(?:-\d+)?@(?:c\.us|s\.whatsapp\.net|g\.us|lid))(?:_|$)/);if(m){ids.add(m[1]);identified++;}}
   if(!ids.size&&/^\+?[\d ()-]+$/.test(titleText)){const digits=titleText.replace(/\D/g,'');if(/^[1-9]\d{6,14}$/.test(digits))ids.add(digits+'@c.us');}
-  return {recipient:titleText,recipient_id:ids.size===1?[...ids][0]:'',session:session.id};
+  return {recipient:titleText,recipient_id:ids.size===1?[...ids][0]:'',session:session.id,verification:{header_found:!!titleText,message_rows:rows.length,identified_rows:identified,chat_identifiers:ids.size,composer_count:composers().length}};
  };
  const outgoing=()=>[...(main?.querySelectorAll('.message-out')||[])].slice(-50).map(e=>{
-  const id=e.getAttribute('data-id')||e.closest('[data-id]')?.getAttribute('data-id')||e.querySelector('[data-id]')?.getAttribute('data-id')||'';
+  const id=messageId(e);
   const content=e.querySelector('[data-testid="msg-text"],.selectable-text');
   const icon=e.querySelector('[data-icon="msg-error"],[data-icon="msg-time"],[data-icon="msg-dblcheck-ack"],[data-icon="msg-dblcheck"],[data-icon="msg-check"]');
   return {id,text:textOf(content),icon:icon?.getAttribute('data-icon')||''};
@@ -34,7 +45,7 @@ function nexusWhatsApp(payload){
   else{const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;if(!set)return false;set.call(e,text);e.dispatchEvent(new Event('input',{bubbles:true}));}
   return norm(e.isContentEditable?e.innerText:e.value)===norm(text);
  };
- const searchBox=()=>{const els=[...side.querySelectorAll('[contenteditable="true"][role="textbox"],input[type="text"],[data-testid="chat-list-search"]')].filter(visible);return els.length===1?els[0]:null;};
+ const searchBox=()=>{const els=inputs(side,'[contenteditable="true"][role="textbox"],input[type="text"],[data-testid="chat-list-search"]');return els.length===1?els[0]:null;};
  const rows=()=>{
   let els=[...side.querySelectorAll('#pane-side [role="row"],#pane-side [role="listitem"],[aria-label="Chat list"] [role="row"]')].filter(visible);
   if(!els.length)els=[...side.querySelectorAll('#pane-side [data-testid="cell-frame-container"]')].filter(visible);

@@ -61,6 +61,22 @@ def test_existing_user_draft_is_protected():
     assert result['status']=='blocked' and wa.composer=='My unsent draft' and wa.clicks==0
 
 
+def test_missing_identity_reports_what_failed_without_sending():
+    wa=Fixture();wa.thread=''
+    result=wa.prepare('Saad Cheema','hello')
+    assert result['status']=='blocked' and wa.clicks==0
+    assert 'chat identifier missing' in result['reason']
+    assert 'Open the exact chat with existing history' not in result['reason']
+
+
+def test_page_status_exposes_counts_without_message_history():
+    wa=WhatsApp();wa.window=object()
+    checks={'header_found':True,'message_rows':2,'identified_rows':0,'chat_identifiers':0,'composer_count':1}
+    wa._call=lambda op:{'status':'ready','recipient':'Saad Cheema','verification':checks,'outgoing':[{'text':'private history'}]}
+    result=wa.status()
+    assert result['verification']==checks and 'outgoing' not in result
+
+
 @pytest.mark.parametrize('change',['composer','recipient','thread','session'])
 def test_changes_after_preparation_block_send(change):
     wa=Fixture();draft=wa.prepare('Saad Cheema','hello')
