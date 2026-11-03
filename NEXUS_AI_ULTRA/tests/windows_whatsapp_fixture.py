@@ -13,11 +13,12 @@ def main():
     errors=[]
     fixtures=Path(__file__).resolve().parent/'fixtures/whatsapp'
     with tempfile.TemporaryDirectory(prefix='nexus-wa-native-',ignore_cleanup_errors=True) as directory:
-        window=webview.create_window('NEXUS WhatsApp LOCAL FIXTURE','about:blank',width=950,height=650,js_api=None)
+        # WebView2 need not raise NavigationCompleted for its initial about:blank.
+        window=webview.create_window('NEXUS WhatsApp LOCAL FIXTURE',html='<html><body>Local fixture bootstrap</body></html>',width=950,height=650,js_api=None)
         wa=WhatsApp();wa.attach(webview)
         def run():
             try:
-                assert window.events.loaded.wait(25),'Blank WebView2 did not initialize'
+                assert window.events.loaded.wait(40),'Local HTML WebView2 did not initialize'
                 from System import Action
                 from Microsoft.Web.WebView2.Core import CoreWebView2HostResourceAccessKind
                 def mapping():
