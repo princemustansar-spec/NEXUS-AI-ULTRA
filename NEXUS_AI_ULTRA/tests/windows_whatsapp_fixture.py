@@ -32,6 +32,8 @@ def main():
                     except Exception:pass
                     time.sleep(.1)
                 else:raise AssertionError('Local fixture marker missing; never run messaging automation on an unverified page')
+                nested=(fixtures/'nested.js').read_text(encoding='utf-8')
+                assert window.evaluate_js('('+nested+')()') is True
                 # Only attach after proving this page is the isolated local fixture.
                 wa.window=window
                 draft=wa.prepare('Saad Cheema','Fixture message only')
@@ -48,7 +50,7 @@ def main():
                 window.evaluate_js("document.querySelector('#composer').textContent='User edited this draft'")
                 blocked=wa.send(fresh['draft_id'])
                 assert blocked['sent'] is False and window.evaluate_js('window.clicks')==1,blocked
-                print('Native WebView2 LOCAL FIXTURE: exact contact/draft, approval snapshot, one send/tick, replay and edited-draft guards passed; no real account/messages',flush=True)
+                print('Native WebView2 LOCAL FIXTURE: nested IDs/wrapped inputs, exact contact/draft, approval snapshot, one send/tick, replay and edited-draft guards passed; no real account/messages',flush=True)
             except BaseException:
                 errors.append(traceback.format_exc());print(errors[-1],flush=True)
             finally:

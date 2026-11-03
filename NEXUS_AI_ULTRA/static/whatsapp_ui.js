@@ -5,7 +5,7 @@ function renderWhatsAppCenter(parent){
  const panel=card(parent,'WhatsApp'),output=node('p');output.id='whatsapp-output';
  const contact=field(panel,'Contact name or international number'),message=field(panel,'Exact message','textarea');contact.id='whatsapp-contact';message.id='whatsapp-message';
  let draft=whatsappLastDraft;
- const show=r=>{output.textContent=r.status+(r.reason?' · '+r.reason:'')+(r.message?' · '+r.message:'')+(r.matches?' · '+r.matches.map(m=>m.name).join(', '):'');};
+ const show=r=>{output.textContent=r.status+(r.reason?' · '+r.reason:'')+(r.message?' · '+r.message:'')+(r.matches?' · '+r.matches.map(m=>m.name).join(', '):'')+(r.verification?' · Verification: '+JSON.stringify(r.verification):'');};
  const action=(label,fn)=>{const b=button(label,async()=>{if(b.disabled)return;b.disabled=true;try{await fn();}finally{b.disabled=false;}});panel.append(b);};
  action('Open WhatsApp / QR login',async()=>show((await api('tools/whatsapp_open',{})).result));
  action('Check WhatsApp / send status',async()=>show((await api('tools/whatsapp_status',{draft_id:draft})).result));
