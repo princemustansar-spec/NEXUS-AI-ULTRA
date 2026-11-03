@@ -178,6 +178,19 @@ class Providers:
         return type(exc).__name__ + ': ' + str(exc).split('Bearer')[0][:180]
 
     async def request(self, messages, tools=None, allow_paid=False):
+        from . import ollama_local
+        configs=self.configs();local=next((p for p in configs if p['id']=='ollama' and p['enabled']),None)
+        preferred=self.store.get('preferred_provider','')
+        if local and (preferred=='ollama' or not any(p['enabled'] for p in configs if p['id']!='ollama')):
+            try:return await ollama_local.request(self,messages,tools)
+            except (httpx.HTTPError,ValueError,KeyError,TypeError) as exc:raise ValueError('Local Ollama: '+self.error(exc)) from None
+        try:return await self._request_remote(messages,tools,allow_paid)
+        except ValueError:
+            if not local or not self.store.get('ollama_fallback',False):raise
+            try:return await ollama_local.request(self,messages,tools)
+            except (httpx.HTTPError,ValueError,KeyError,TypeError) as exc:raise ValueError('Ollama fallback unavailable: '+self.error(exc)) from None
+
+    async def _request_remote(self, messages, tools=None, allow_paid=False):
         errors = []
         preferred = self.store.get('preferred_provider', '')
         if preferred in ('chatgpt-account','claude-account'):
@@ -201,7 +214,7 @@ class Providers:
             async with asyncio.timeout(45):
                 async with httpx.AsyncClient(timeout=httpx.Timeout(6, connect=3), follow_redirects=False) as c:
                     for p in configs:
-                        if p.get('kind')=='account':continue
+                        if p.get('kind')=='account' or p['id']=='ollama':continue
                         if not p['enabled']:
                             continue
                         if p['paid'] and not allow_paid:

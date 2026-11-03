@@ -24,6 +24,7 @@ const nested=fs.readFileSync(path.join(__dirname,'fixtures/whatsapp/nested.js'),
   await reset();p=await pin('hello');await call('compose',p);await page.locator('#history').evaluate(e=>{const copy=e.firstElementChild.cloneNode(true);copy.dataset.id='true_923001234567@c.us_INTERVENING';e.append(copy);});assert(!(await call('send',p)).clicked);
   // Current layouts can wrap inputs and put message IDs inside the bubble.
   await reset();await page.evaluate(script=>eval('('+script+')')(),nested);
+  assert.equal(await page.locator('#history .message-in,#history .message-out').count(),0,'Fixture reproduces visible history without legacy message classes');
   assert.equal((await call('search',{query:'Saad Cheema'})).status,'searching');
   let modern=await call('state');assert.equal(modern.recipient,'Saad Cheema');assert.equal(modern.recipient_id,'923001234567@c.us');
   assert.equal(modern.verification.composer_count,1);assert.equal(modern.verification.identified_rows,1);
