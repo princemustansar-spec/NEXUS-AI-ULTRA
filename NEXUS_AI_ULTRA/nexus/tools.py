@@ -10,6 +10,10 @@ from urllib.parse import quote, urlencode
 import psutil
 
 CATALOG = {
+ 'daily_briefing': ('Read saved routine and today reminders; news must be yes or no', False, {'news':'string'}),
+ 'news_briefing': ('Fetch dated headlines with source links; region is pakistan, international or both', False, {'region':'string'}),
+ 'routine_save': ('Save a recurring local-time routine after user approval; days is comma-separated Monday=0 through Sunday=6', True, {'title':'string','time':'string','days':'string'}),
+ 'pc_lock': ('Request Windows workstation lock after user confirmation', True, {}),
  'system_info': ('Live CPU, RAM, disk, OS information', False, {}),
  'processes': ('List running processes', False, {}),
  'windows': ('List visible Windows desktop windows', False, {}),
@@ -56,6 +60,8 @@ def explicit_youtube_request(text):
 class Tools:
     def __init__(self, store):
         self.store = store
+        from .personal import Personal
+        self.personal=Personal(store)
         self.last_net = (time.monotonic(), psutil.net_io_counters())
 
     def schemas(self):
@@ -96,6 +102,20 @@ class Tools:
         expected = CATALOG[name][2]
         if set(args) != set(expected) or any(not isinstance(v, str) for v in args.values()):
             raise ValueError('Tool arguments do not match the schema')
+        if name=='daily_briefing':
+            if args['news'] not in ('yes','no'):raise ValueError('news must be yes or no')
+            return self.personal.briefing(args['news']=='yes')
+        if name=='news_briefing':return self.personal.news.get(args['region'])
+        if name=='routine_save':
+            try:days=[int(d.strip()) for d in args['days'].split(',')]
+            except ValueError:raise ValueError('days must be comma-separated weekday numbers') from None
+            return {'id':self.personal.add_routine({**args,'days':days})}
+        if name=='pc_lock':
+            if os.name!='nt':raise ValueError('Workstation lock requires Windows.')
+            import ctypes
+            lock=ctypes.WinDLL('user32',use_last_error=True).LockWorkStation;lock.argtypes=[];lock.restype=ctypes.c_int
+            if not lock():raise OSError('Windows did not accept the lock request.')
+            return {'lock_requested':True,'message':'Windows accepted the lock request; screen state was not independently observed.'}
         if name.startswith('whatsapp_') and name!='whatsapp_draft':
             from .whatsapp import whatsapp
             if name=='whatsapp_open':return whatsapp.open()

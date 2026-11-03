@@ -145,6 +145,12 @@ def run_desktop(backend, webview, floating=None):
             def begin_floating():
                 try:
                     avatar.show()
+                    if state.get('personal_settings',{}).get('welcome_enabled'):
+                        welcome=http.client.HTTPConnection(HOST,backend.port,timeout=110)
+                        try:
+                            welcome.request('POST','/api/personal/startup',body='{}',headers={'Content-Type':'application/json','X-Nexus-Token':state['token']})
+                            welcome.getresponse().read()
+                        finally:welcome.close()
                     if not state.get('avatar_settings',{}).get('auto_voice',True):return
                     connection=http.client.HTTPConnection(HOST,backend.port,timeout=10)
                     try:

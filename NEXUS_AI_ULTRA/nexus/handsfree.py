@@ -258,7 +258,7 @@ class HandsFree:
             raise
         if not isinstance(result,dict) or 'text' not in result:
             raise ValueError('Voice chat did not complete. Request may have been cancelled.')
-        if not self.pending():await self._say(result['text'])
+        if not self.pending():await self._say(result.get('speech_text') or result['text'])
         await self._next_approval()
 
     async def _run(self):

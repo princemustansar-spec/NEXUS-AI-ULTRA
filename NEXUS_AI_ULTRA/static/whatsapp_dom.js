@@ -22,17 +22,24 @@ function nexusWhatsApp(payload){
   const outer=candidates.filter(n=>!candidates.some(other=>other!==n&&other.contains(n)));
   const ids=[...new Set(outer.map(n=>n.getAttribute('data-id')))];return ids.length===1?ids[0]:'';
  };
+ const messageRows=()=>{
+  // WhatsApp can remove message-in/out CSS classes while keeping message IDs.
+  const all=[...(main?.querySelectorAll('[data-id]')||[])].filter(e=>/^(?:true|false)_/.test(e.dataset.id||'')&&!e.closest('header,footer,[data-testid*="quoted"],[data-testid*="reply-preview"]'));
+  const outer=all.filter(e=>!all.some(parent=>parent!==e&&parent.contains(e)));
+  const legacy=[...(main?.querySelectorAll('.message-in,.message-out')||[])];
+  return [...new Set([...outer.map(e=>e.closest('.message-in,.message-out')||e),...legacy])].filter(e=>!e.closest('[data-testid*="quoted"],[data-testid*="reply-preview"]'));
+ };
  const identity=()=>{
   const title=main?.querySelector('header [data-testid="conversation-info-header-chat-title"]')||main?.querySelector('header span[title][dir="auto"]')||main?.querySelector('header span[title]');
   const titleText=norm(title?.getAttribute('title')||textOf(title));
-  const rows=[...(main?.querySelectorAll('.message-in,.message-out')||[])];
+  const rows=messageRows();
   const ids=new Set();let identified=0;for(const e of rows){const m=messageId(e).match(/^(?:true|false)_(\d+(?:-\d+)?@(?:c\.us|s\.whatsapp\.net|g\.us|lid))(?:_|$)/);if(m){ids.add(m[1]);identified++;}}
   if(!ids.size&&/^\+?[\d ()-]+$/.test(titleText)){const digits=titleText.replace(/\D/g,'');if(/^[1-9]\d{6,14}$/.test(digits))ids.add(digits+'@c.us');}
   return {recipient:titleText,recipient_id:ids.size===1?[...ids][0]:'',session:session.id,verification:{header_found:!!titleText,message_rows:rows.length,identified_rows:identified,chat_identifiers:ids.size,composer_count:composers().length}};
  };
- const outgoing=()=>[...(main?.querySelectorAll('.message-out')||[])].slice(-50).map(e=>{
+ const outgoing=()=>messageRows().filter(e=>messageId(e).startsWith('true_')).slice(-50).map(e=>{
   const id=messageId(e);
-  const content=e.querySelector('[data-testid="msg-text"],.selectable-text');
+  const content=[...e.querySelectorAll('[data-testid="msg-text"],.selectable-text,[data-pre-plain-text]')].find(n=>!n.closest('[data-testid*="quoted"],[data-testid*="reply-preview"]'));
   const icon=e.querySelector('[data-icon="msg-error"],[data-icon="msg-time"],[data-icon="msg-dblcheck-ack"],[data-icon="msg-dblcheck"],[data-icon="msg-check"]');
   return {id,text:textOf(content),icon:icon?.getAttribute('data-icon')||''};
  });

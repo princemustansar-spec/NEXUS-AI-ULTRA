@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
  const $=id=>document.getElementById(id),canvas=$('avatar');
- let token='',dragMode='bridge',autoVoice=false,micBusy=false,polling=false,phase='idle',signal=0,pollTimer=0,frame=0,last=0,disposed=false;
+ let token='',dragMode='bridge',autoVoice=false,micBusy=false,polling=false,phase='idle',mood='neutral',signal=0,pollTimer=0,frame=0,last=0,disposed=false;
  const shell=document.querySelector('.avatar-shell');let controlsTimer=0;
  shell.addEventListener('pointerenter',()=>{clearTimeout(controlsTimer);shell.classList.add('controls-open');});
  shell.addEventListener('pointerleave',()=>{clearTimeout(controlsTimer);controlsTimer=setTimeout(()=>shell.classList.remove('controls-open'),600);});
@@ -17,6 +17,7 @@
  $('interrupt').onclick=async()=>{try{const r=await fetch('/api/handsfree/interrupt',{method:'POST',headers:{'X-Nexus-Token':token,'Content-Type':'application/json'},body:'{}'});const data=await r.json();if(!r.ok)throw Error(data.detail);poll();}catch(e){$('phase').title=e.message;}};
  $('close').onclick=()=>action('close');$('dashboard').onclick=()=>action('dashboard');
  function status(data){
+  mood=['happy','caring','curious','friendly'].includes(data.emotion)?data.emotion:'neutral';canvas.dataset.emotion=mood;
   token=data.token;dragMode=data.drag_mode||'bridge';const voice=data.voice||{},tts=data.tts||{},hf=data.handsfree||{};autoVoice=!!hf.active;$('interrupt').disabled=!hf.active||hf.phase!=='speaking';$('mic').dataset.active=String(autoVoice);$('mic').setAttribute('aria-label',autoVoice?'Pause auto voice':data.voice_muted?'Unmute and start auto voice':'Start auto voice');$('mic').title=autoVoice?(hf.interrupt_mode==='any'?'Auto voice ON — speak to interrupt; headphones reduce echo':hf.interrupt_mode==='wake'?'Auto voice ON — say Nexus ruko to interrupt':'Auto voice ON — use Stop & listen to interrupt'):data.voice_muted?'Unmute and start auto voice — Google mode sends clips online':'Start auto voice — Google mode sends clips online';
   phase=data.emergency?'emergency':hf.phase==='error'?'error':hf.active?(hf.phase==='approval'?'approval':hf.phase==='speaking'?'speaking':hf.phase==='thinking'?'thinking':voice.phase==='calibrating'?'calibrating':'listening'):voice.phase==='error'?'error':['calibrating','listening'].includes(voice.phase)?voice.phase:voice.phase==='transcribing'||data.thinking?'thinking':tts.phase==='speaking'?'speaking':'idle';
   signal=phase==='listening'&&Number.isFinite(voice.level_dbfs)?Math.max(0,Math.min(1,(voice.level_dbfs+60)/45)):0;
@@ -51,15 +52,16 @@
   gl.enableVertexAttribArray(loc.p);gl.enableVertexAttribArray(loc.n);gl.enable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);
   let frames=0,lastStatic='';
   function render(now){if(disposed||gl.isContextLost())return;frame=requestAnimationFrame(render);const active=['listening','thinking','speaking'].includes(phase),interval=1000/(active?24:15);if(now-last<interval)return;last=now;
-   const ratio=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}const moving=motion()&&!document.hidden&&phase!=='emergency',staticKey=[phase,signal.toFixed(3),w,h].join(':');if(!moving&&lastStatic===staticKey)return;lastStatic=moving?'':staticKey;gl.viewport(0,0,w,h);gl.uniform1f(loc.aspect,w/h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+   const ratio=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}const moving=motion()&&!document.hidden&&phase!=='emergency',staticKey=[phase,mood,signal.toFixed(3),w,h].join(':');if(!moving&&lastStatic===staticKey)return;lastStatic=moving?'':staticKey;gl.viewport(0,0,w,h);gl.uniform1f(loc.aspect,w/h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
    const t=moving?now*.0018:0,float=moving?Math.sin(t*1.5)*.055:0,pulse=phase==='listening'?signal*.07:phase==='speaking'&&moving?(.5+.5*Math.sin(t*9))*.045:0;
    const root=mul(translate(0,float,0),mul(rotateY(moving?Math.sin(t*.65)*.25:0),scale(1+pulse,1+pulse,1+pulse)));
    const tint=phase==='listening'?[.04,.95,.65]:phase==='thinking'?[.55,.25,.95]:phase==='speaking'?[.15,.8,1]:phase==='approval'?[1,.64,.1]:phase==='error'||phase==='emergency'?[1,.25,.2]:[.02,.65,.95];
    draw(sphere,mul(root,scale(.70,.76,.63)),[.025,.13,.22]);
    for(const x of [-.76,.76])draw(sphere,mul(root,mul(translate(x,0,0),scale(.085,.20,.13))),tint,.25);
    const blink=moving&&(t%5)>4.84?.12:1;
-   for(const x of [-.23,.23])draw(eye,mul(root,mul(translate(x,.13,.635),scale(.23,.095*blink,1))),tint,1.2);
-   for(const x of [-.13,0,.13])draw(eye,mul(root,mul(translate(x,-.22,.60),scale(.085,.026,1))),tint,.6);
+   const expressive=['idle','speaking'].includes(phase),emotion=expressive?mood:'neutral';
+   for(const x of [-.23,.23])draw(eye,mul(root,mul(translate(x,.13+(emotion==='curious'&&x>0?.05:0),.635),scale(.23,(emotion==='happy'?.055:emotion==='caring'?.07:.095)*blink,1))),tint,1.2);
+   for(const x of [-.13,0,.13])draw(eye,mul(root,mul(translate(x,-.22+(emotion==='happy'||emotion==='friendly'?x*x*1.8:emotion==='caring'?-x*x:0),.60),scale(.085,.026,1))),tint,.6);
    draw(ring,mul(translate(0,float,0),mul(rotateY(t*.4),rotateX(1.05))),tint,.35);
    draw(ring,mul(translate(0,float,0),mul(rotateZ(-.55+t*.18),rotateY(.72))),[.06,.32,.65],.15);
    canvas.dataset.frames=String(++frames);canvas.dataset.renderer='webgl';

@@ -10,6 +10,7 @@ const root=path.resolve(__dirname,'..');
   const p=new URL(route.request().url()).pathname;
   if(p==='/api/state')return route.fulfill({json:state});
   if(p==='/api/accounts/status')return route.fulfill({json:status});
+  if(p==='/api/personal')return route.fulfill({json:{profile:{preferred_name:'',tone:'friendly'},routines:[],startup:{available:false,enabled:false}}});
   if(p.startsWith('/api/')){
    assert.equal(route.request().headers()['x-nexus-token'],'fixture');const body=route.request().postDataJSON();calls.push({p,body});
    if(p.endsWith('/login')){assert.equal(body.consent,true);return route.fulfill({json:{pending:true}});}
