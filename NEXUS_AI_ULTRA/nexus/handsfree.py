@@ -234,6 +234,14 @@ class HandsFree:
             return
         result=await self.approve(confirmation['id'],answer in YES)
         message='Action cancel kar diya.' if answer in NO else 'Tool ka result: '+json.dumps(result,ensure_ascii=False,default=str)
+        if answer in YES and confirmation.get('name')=='whatsapp_send':
+            receipt=result.get('result',{})
+            who=confirmation.get('args',{}).get('recipient','contact')
+            if receipt.get('sent') is True:
+                message=who+' ke liye WhatsApp ka message acceptance tick verify ho gaya. '+('Delivery ticks bhi verify ho gayi hain.' if receipt.get('delivery_verified') else 'Recipient ki delivery abhi confirm nahi hui.')
+            elif receipt.get('sent') is False:message='WhatsApp message send nahi hua: '+str(receipt.get('reason',receipt.get('status','blocked')))
+            else:message='WhatsApp send ka result abhi confirm nahi. Chat check karein; main khud dobara send nahi karunga.'
+
         self.store.add('chat',{'role':'assistant','text':message,'provider':'NEXUS voice approval','model':'local tool'})
         await self._say(message)
         await self._next_approval()

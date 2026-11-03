@@ -24,6 +24,11 @@ CATALOG = {
  'web_search': ('Open a web search in the default browser automatically; no extra approval', False, {'query':'string'}),
  'open_url': ('Open an HTTPS public URL in the default browser automatically; no extra approval', False, {'url':'string'}),
  'youtube_player': ('Search/play/pause/resume/next inside the NEXUS-controlled YouTube window; returns observed media state', False, {'action':'string','query':'string'}),
+ 'whatsapp_open': ('Open NEXUS WhatsApp Web; scan QR once if login is needed', False, {}),
+ 'whatsapp_search': ('Find saved WhatsApp chat names; do not guess partial or duplicate matches', False, {'query':'string'}),
+ 'whatsapp_prepare': ('Find an exact saved contact name or international phone number and prepare the exact message; returns draft_id without sending', False, {'contact':'string','message':'string'}),
+ 'whatsapp_send': ('Send a verified prepared WhatsApp draft only after user approval of recipient and message; never retry an uncertain attempt', True, {'draft_id':'string'}),
+ 'whatsapp_status': ('Check WhatsApp login or a previous send receipt without sending; use empty draft_id for login or the most recent send status', False, {'draft_id':'string'}),
  'whatsapp_draft': ('Open a WhatsApp draft; user must manually send', True, {'phone':'string','message':'string'}),
  'screenshot': ('Capture the desktop to an approved PNG path', True, {'path':'string'}),
  'reminder': ('Create a persistent reminder with an ISO timestamp including timezone', True, {'title':'string','due':'string'}),
@@ -91,6 +96,13 @@ class Tools:
         expected = CATALOG[name][2]
         if set(args) != set(expected) or any(not isinstance(v, str) for v in args.values()):
             raise ValueError('Tool arguments do not match the schema')
+        if name.startswith('whatsapp_') and name!='whatsapp_draft':
+            from .whatsapp import whatsapp
+            if name=='whatsapp_open':return whatsapp.open()
+            if name=='whatsapp_search':return whatsapp.search(args['query'])
+            if name=='whatsapp_prepare':return whatsapp.prepare(args['contact'],args['message'])
+            if name=='whatsapp_send':return whatsapp.send(args['draft_id'])
+            return whatsapp.status(args['draft_id'])
         if name == 'youtube_player':
             from .youtube import player
             result = player.command(args['action'], args['query'])
