@@ -1,0 +1,9 @@
+# Inspect the actual WhatsApp layout
+
+This support runner is for cases where the installed NEXUS reports a header and composer but zero message rows despite visible history. It does not change production selectors or disable identity/approval checks.
+
+Close all NEXUS windows first. Download diagnostics/whatsapp_layout.py and run it with the installed `.venv/Scripts/python.exe`, passing `--installation` with the existing NEXUS source directory. This launches that installation in dashboard mode with the existing data/profile and normal startup settings. Open WhatsApp Center → Open WhatsApp, then an existing chat. Return to the PowerShell console and press Enter. The runner reads metadata, brings that WhatsApp window forward, then reads it again to compare focus/occlusion. Close NEXUS after the report is printed.
+
+The report is saved to `%TEMP%/nexus-whatsapp-layout.json`. Share its JSON for diagnosis. It contains selector counts, element tags, standard ARIA roles, attribute names, identifier shapes, frame/shadow-root counts and a checksum of the installed bridge. It does not include chat text, contact names, actual identifiers, phone numbers, title/attribute values, page HTML, cookies or tokens. No debugging port is enabled. It does not click Send or modify page content. The ordinary app can still perform normal startup actions or actions explicitly requested by the user while it is open.
+
+Tests reproduce history outside #main, alternate message-ID attributes, class-free message containers and shadow-root content. Browser tests assert that DOM content remains unchanged and fake private message/name/number strings do not appear. Python checks enforce the WhatsApp origin and installed-source checksum; Windows CI evaluates the diagnostic in the real native local fixture before any fixture Send.

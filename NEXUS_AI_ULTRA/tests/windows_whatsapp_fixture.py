@@ -10,6 +10,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 def main():
     import webview
     from nexus.whatsapp import WhatsApp
+    from diagnostics.whatsapp_layout import capture
     errors=[]
     fixtures=Path(__file__).resolve().parent/'fixtures/whatsapp'
     with tempfile.TemporaryDirectory(prefix='nexus-wa-native-',ignore_cleanup_errors=True) as directory:
@@ -35,6 +36,12 @@ def main():
                 nested=(fixtures/'nested.js').read_text(encoding='utf-8')
                 assert window.evaluate_js('('+nested+')()') is True
                 assert window.evaluate_js("document.querySelectorAll('#history .message-in,#history .message-out').length")==0
+                layout=capture(window)
+                assert layout['main']['prefixed_ids']>=1 and layout['main']['message_classes']==0
+                import json
+                safe=json.dumps(layout)
+                assert '923001234567' not in safe and 'Saad Cheema' not in safe and 'Old message' not in safe
+                assert window.evaluate_js('window.clicks')==0
                 # Only attach after proving this page is the isolated local fixture.
                 wa.window=window
                 draft=wa.prepare('Saad Cheema','Fixture message only')
