@@ -23,6 +23,7 @@ def _sapi_file_worker(destination,results):
         import pyttsx3
         from comtypes import COMError
         from comtypes.client import CreateObject
+        import pythoncom
         from nexus.avatar_audio import PlaybackCues,sapi_observer
         engine=pyttsx3.init('sapi5');native=engine.proxy._driver._tts
         allowed=[v for v in engine.getProperty('voices') if not any(s in (v.name+' '+v.id).lower() for s in ('asad','uzma'))]
@@ -36,8 +37,15 @@ def _sapi_file_worker(destination,results):
         try:
             native.AudioOutputStream=stream
             engine.say('Hello Nexus. One two three.');engine.startLoop(False);deadline=time.monotonic()+12
-            while engine.isBusy() and time.monotonic()<deadline:engine.iterate();time.sleep(.01)
-            completed=not engine.isBusy()
+            completed=False
+            while time.monotonic()<deadline:
+                engine.iterate()
+                if native.WaitUntilDone(20):
+                    # File output can finish before pyttsx3's busy flag reflects
+                    # the stream. Drain COM events before closing the file.
+                    for _ in range(4):pythoncom.PumpWaitingMessages();time.sleep(.01)
+                    completed=True;break
+                time.sleep(.01)
         finally:
             engine.stop()
             try:engine.endLoop()
