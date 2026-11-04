@@ -4,7 +4,7 @@ NEXUS now has its own WhatsApp Web window through the existing Windows WebView2 
 
 ## Use
 
-Open WhatsApp Center → **Open WhatsApp / QR login**. After linking, enter the exact saved name (for example, Saad Cheema) and message, then **Prepare & review send**. Safety Center shows the recipient, observed chat identifier and exact message. Only approving that action sends. In auto voice, the existing approval controller reads the same details and accepts `haan approve` or `nahi cancel`.
+Open WhatsApp Center → **Open WhatsApp / QR login**. After linking, enter the exact saved name (for example, Nexus Test Contact) and message, then **Prepare & review send**. Safety Center shows the recipient, observed chat identifier and exact message. Only approving that action sends. In auto voice, the existing approval controller reads the same details and accepts `haan approve` or `nahi cancel`.
 
 Chat can use `whatsapp_prepare(contact,message)` followed by `whatsapp_send(draft_id)`; the latter queues confirmation. `whatsapp_search` lists matching names, and `whatsapp_status` checks login or a receipt without sending. Empty draft_id checks the most recent attempt when present. Existing phone-link/manual drafts remain as a fallback.
 
@@ -12,10 +12,12 @@ Chat can use `whatsapp_prepare(contact,message)` followed by `whatsapp_send(draf
 
 - Native DOM operations run only on HTTPS web.whatsapp.com in the NEXUS-owned window, with no custom JavaScript API exposed to that page.
 - Names must match exactly and uniquely. Partial/duplicate names produce a clarification result. Existing user drafts, reply/edit/media previews and recipient changes are protected.
-- A stable chat identifier must be visible in message IDs or an unsaved-number header. Named chats without observable identity/history, and phone links resolving only to unverified identifiers, are blocked. Open the exact chat with existing history or use the legacy manual draft path in those cases. No number is invented.
+- Legacy chat identifiers are read when present. For opaque message IDs, NEXUS opens Contact info and requires the matching contact name and exactly one full international number. That observed number is included in the approval. A local `phone:+...` reference represents this verified contact; it is not an invented WhatsApp service JID. Hidden, ambiguous or mismatched numbers block preparation.
+- Existing contact/card details are closed first and Contact info is opened from the active chat header, so an unrelated stale panel cannot supply the recipient number. This panel remains open during review. Closing/replacing it, changing its number/name or selecting/searching another chat invalidates the reviewed context. Missing contact identity is never bypassed just because message rows are found.
 - Preparation pins the document/sidebar session, contact name, chat identity, exact composer text and current outgoing-history boundary. Final checks and the single Send click run synchronously in one DOM turn.
 - Drafts and approvals expire in five minutes. Repeated approval requests for one draft reuse the same pending approval. A draft is consumed before attempting Send. A recent matching recipient/message attempt also blocks duplicate drafts from sending twice.
 - A new outgoing bubble with an acceptance tick yields `sent_verified`; two ticks also yield `delivery_verified`. A pending/failed/unknown outcome is reported separately. An unclear result is never automatically retried. The status tool can observe a later tick without another Send.
+- Modern message containers can have opaque IDs without true_/false_ prefixes or a chat address. For these rows, only an unambiguous delivery/status icon outside quoted content identifies an outgoing bubble. Quoted icons cannot supply a receipt. Duplicate prevention maps an observed phone and an old phone-based JID to the same recipient key.
 - Emergency Stop blocks future sends and cancels prepared drafts. Already dispatched messages cannot be reversed.
 
 ## Testing and limits
