@@ -22,7 +22,7 @@ def _sapi_file_worker(destination,results):
     try:
         import pyttsx3
         from comtypes import COMError
-        from comtypes.client import CreateObject
+        from comtypes.client import CreateObject,GetEvents
         import pythoncom
         from nexus.avatar_audio import PlaybackCues,sapi_observer
         engine=pyttsx3.init('sapi5');native=engine.proxy._driver._tts
@@ -36,7 +36,12 @@ def _sapi_file_worker(destination,results):
         stream=CreateObject('SAPI.SpFileStream');stream.Open(destination,3,False);previous=None
         try:previous=native.AudioOutputStream
         except COMError:pass  # Hosted runners may have no physical audio endpoint.
-        messages=[];bridge=PlaybackCues(messages.append);connection=sapi_observer(engine,bridge,'Hello Nexus. One two three.')
+        messages=[];raw_events=[];bridge=PlaybackCues(messages.append);connection=sapi_observer(engine,bridge,'Hello Nexus. One two three.')
+        class IndependentProbe:
+            def StartStream(self,*args):raw_events.append(('start',0))
+            def Viseme(self,*args):raw_events.append(('viseme',int(args[-1])))
+            def EndStream(self,*args):raw_events.append(('end',0))
+        raw_connection=GetEvents(native,IndependentProbe())
         try:
             native.AudioOutputStream=stream
             native.Speak('Hello Nexus. One two three.',1);deadline=time.monotonic()+12
@@ -54,8 +59,10 @@ def _sapi_file_worker(destination,results):
             if previous is not None:native.AudioOutputStream=previous
             stream.Close()
             if connection:connection.disconnect()
+            raw_connection.disconnect()
         results.put(dict(completed=completed,connected=connection is not None,
-                         visemes=sum(m['animation']['mode']=='viseme' and m['animation']['pose']!=0 for m in messages),events=len(messages)))
+                         visemes=sum(m['animation']['mode']=='viseme' and m['animation']['pose']!=0 for m in messages),events=len(messages),
+                         raw_visemes=sum(kind=='viseme' and value!=0 for kind,value in raw_events),raw_events=len(raw_events)))
     except Exception:
         import traceback
         results.put({'error':traceback.format_exc()})
@@ -71,4 +78,6 @@ def test_real_sapi_visemes_with_file_output(tmp_path):
     assert not value.get('error'),value.get('error')
     assert value['completed'],value
     assert destination.stat().st_size>44
+    if not value['raw_visemes']:
+        pytest.skip('Native file synthesis passed, but an independent SAPI observer received no visemes on this runner; physical audio endpoint acceptance remains required.')
     assert value['connected'] and value['visemes']>0,value

@@ -75,6 +75,8 @@ contracts, stale/expired cues, state transitions, mute/cancel, local import,
 invalid packs, mode switching, GUI controls and native drag dispatch. Windows CI
 also exercises native SAPI file synthesis and physical WebView2 mouse input in
 both avatar modes. See PROJECT_STATE.md for observed results and remaining checks.
+The SAPI file test uses an independent event observer: if the runner exposes no
+native visemes, it reports a skip rather than claiming a successful lip-sync test.
 
 Physical speaker/microphone behavior, perceived lip sync, portrait alignment and
 CPU/RAM on the user's Core i3/12 GB laptop require laptop acceptance. No hardware

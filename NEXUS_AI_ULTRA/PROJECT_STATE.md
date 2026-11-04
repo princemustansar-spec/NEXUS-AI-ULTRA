@@ -38,6 +38,9 @@ runtime dependency is added. Full details: docs/LIVE_HUMAN_AVATAR.md.
 - Native Windows SAPI visemes/file synthesis and both WebView2 mouse modes are
   required CI checks on this branch. Their observed outcome is in the feature
   PR's GitHub checks; physical laptop acceptance remains separate.
+  The native file probe independently checks whether the runner emits visemes;
+  if its independent observer receives none, synthesis is verified but viseme
+  acceptance is explicitly skipped and must be checked with a real audio device.
 
 Tests use synthetic images/audio, not private portraits. A raw photo alone has
 head/breathing movement; matching local expression frames are required for full

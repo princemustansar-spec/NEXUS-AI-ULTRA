@@ -76,12 +76,14 @@ def sapi_observer(engine, bridge, text):
         from comtypes.gen import SpeechLib
         native = engine.proxy._driver._tts
         class Sink:
-            def _ISpeechVoiceEvents_StartStream(self, _stream, _position):
+            def _ISpeechVoiceEvents_StartStream(self, *_args):
                 bridge.begin('word-boundary')
-            def _ISpeechVoiceEvents_Viseme(self, _stream, _position, duration, _next, _feature, current):
+            def _ISpeechVoiceEvents_Viseme(self, *args):
+                if len(args)<6:return
+                duration,current=args[-4],args[-1]
                 if not bridge.active:bridge.begin('viseme')
                 bridge.viseme(current,duration)
-            def _ISpeechVoiceEvents_EndStream(self, _stream, _position):
+            def _ISpeechVoiceEvents_EndStream(self, *_args):
                 bridge.end()
         native.EventInterests |= SpeechLib.SVEViseme
         connection = GetEvents(native, Sink())
