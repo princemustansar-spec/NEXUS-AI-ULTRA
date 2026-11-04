@@ -22,6 +22,17 @@ def test_profile_validation_and_saved_style(tmp_path):
     with pytest.raises(ValueError):validate_profile({'unknown':True})
     assert Personal(store).profile()['preferred_name']=='Friend';store.db.close()
 
+def test_face_selection_persists_and_reaches_avatar_telemetry(tmp_path,monkeypatch):
+    app=app_fixture(tmp_path,monkeypatch)
+    with TestClient(app.app) as c:
+        c.headers['x-nexus-token']=app.session_token
+        assert c.get('/api/avatar/status').json()['avatar_style']=='human'
+        assert c.post('/api/personal/settings',json={'avatar_style':'robot'}).status_code==200
+        assert c.get('/api/avatar/status').json()['avatar_style']=='robot'
+        assert c.get('/api/personal').json()['profile']['avatar_style']=='robot'
+        assert c.post('/api/personal/settings',json={'avatar_style':'unknown'}).status_code==400
+    app.store.db.close()
+
 @pytest.mark.parametrize('data',[{'title':'x','time':'24:00'},{'title':'','time':'08:00'},{'title':'x','time':'08:00','days':[]},{'title':'x','time':'08:00','days':[True]}])
 def test_routine_rejects_invalid_times_and_days(data):
     with pytest.raises(ValueError):validate_routine(data)

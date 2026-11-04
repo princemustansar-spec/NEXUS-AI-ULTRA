@@ -5,11 +5,12 @@ async function renderPersonalSettings(parent){
  try{
   const data=await api('personal',undefined,'GET'),p=data.profile;
   const name=field(box,'What should NEXUS call you?','text',p.preferred_name);name.id='personal-name';
-  const tone=node('select');tone.id='personal-tone';for(const value of ['friendly','calm','concise'])tone.append(new Option(value,value));tone.value=p.tone;box.append(node('label','Reply style'),tone);
+  const tone=node('select');tone.id='personal-tone';for(const [label,value] of [['Friendly & playful','friendly'],['Calm & supportive','calm'],['Short & warm','concise']])tone.append(new Option(label,value));tone.value=p.tone;box.append(node('label','Reply style'),tone);
+  const look=node('select');look.id='personal-avatar-style';look.append(new Option('NEXUS human face','human'),new Option('Classic robot','robot'));look.value=p.avatar_style||'human';box.append(node('label','Floating face'),look);
   const checks={};for(const [key,label] of [['welcome_enabled','Welcome when NEXUS starts'],['speak_welcome','Speak the welcome (respects mute)'],['routine_in_welcome','Include today routine and reminders'],['news_on_start','Fetch Pakistan/world headlines at startup (online)'],['emotions','Expressive avatar']]){
    const input=node('input');input.type='checkbox';input.checked=p[key];input.id='personal-'+key;const lab=node('label',' '+label);lab.prepend(input);box.append(lab);checks[key]=input;
   }
-  box.append(button('Save personal settings',async()=>{await api('personal/settings',{preferred_name:name.value,tone:tone.value,...Object.fromEntries(Object.entries(checks).map(([k,v])=>[k,v.checked]))});await refresh();status.textContent='Personal settings saved.';}));
+  box.append(button('Save personal settings',async()=>{await api('personal/settings',{preferred_name:name.value,tone:tone.value,avatar_style:look.value,...Object.fromEntries(Object.entries(checks).map(([k,v])=>[k,v.checked]))});await refresh();status.textContent='Personal settings saved.';}));
   const login=node('input');login.type='checkbox';login.checked=data.startup.enabled;login.disabled=!data.startup.available;login.id='personal-login';const label=node('label',' Start NEXUS when I sign in to Windows');label.prepend(login);box.append(label);
   const saveStartup=button('Apply Windows startup',async()=>{const r=await api('personal/startup-mode',{enabled:login.checked});status.textContent=r.enabled?'Windows sign-in startup enabled.':'Windows sign-in startup disabled.';});saveStartup.disabled=!data.startup.available;box.append(saveStartup);
   box.append(button('Show daily briefing',async()=>{const r=await api('personal/briefing',{news:false,speak:false});status.textContent=r.text;}),button('Speak daily briefing',async()=>{status.textContent='Preparing briefing…';const r=await api('personal/briefing',{news:checks.news_on_start.checked,speak:true});status.textContent=r.text+(r.spoken?'':' · '+r.reason);}));

@@ -41,8 +41,8 @@ const root=path.resolve(__dirname,'..');
   await page.evaluate(()=>{localStorage.setItem('core-motion','off');dispatchEvent(new StorageEvent('storage'));});
   await page.waitForTimeout(150);const stillA=await page.locator('canvas').screenshot();await page.waitForTimeout(250);const stillB=await page.locator('canvas').screenshot();assert(stillA.equals(stillB),'motion Off must stop visible animation');
   if(process.env.AVATAR_SCREENSHOT_DIR){fs.mkdirSync(process.env.AVATAR_SCREENSHOT_DIR,{recursive:true});state.emergency=false;state.voice={phase:'listening',level_dbfs:-25};await page.waitForFunction(()=>document.querySelector('#phase').textContent==='LISTENING');await page.mouse.move(500,500);await page.waitForTimeout(820);await page.screenshot({path:path.join(process.env.AVATAR_SCREENSHOT_DIR,'floating-avatar.png'),omitBackground:true});}
-  state.emergency=false;state.emotion='happy';await page.waitForFunction(()=>document.querySelector('#avatar').dataset.emotion==='happy'&&document.querySelector('#phase').textContent==='READY');
-  const happy=await page.locator('canvas').screenshot();state.emotion='caring';await page.waitForFunction(()=>document.querySelector('#avatar').dataset.emotion==='caring');
+  state.emergency=false;state.emotion='happy';await page.waitForFunction(()=>document.querySelector('#avatar').dataset.pose?.endsWith(':idle:happy'));
+  const happy=await page.locator('canvas').screenshot();state.emotion='caring';await page.waitForFunction(()=>document.querySelector('#avatar').dataset.pose?.endsWith(':idle:caring'));
   const caring=await page.locator('canvas').screenshot();assert(!happy.equals(caring),'Avatar expression changes must affect rendered pixels even with motion Off');
   assert(requests.every(p=>p.startsWith('/static/')||p.startsWith('/api/avatar/')||p.startsWith('/api/handsfree/')),'avatar must not request AI providers, chat history or voice capture');assert.deepEqual(errors,[]);
   console.log('Figure-only + auto-voice start/stop:  WebGL pixels/movement, transparent background, live states, level, motion Off, authenticated controls, telemetry-only requests: passed');

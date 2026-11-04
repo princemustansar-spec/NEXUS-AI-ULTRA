@@ -1,7 +1,10 @@
 'use strict';
 (()=>{
  const $=id=>document.getElementById(id),canvas=$('avatar');
- let token='',dragMode='bridge',autoVoice=false,micBusy=false,polling=false,phase='idle',mood='neutral',signal=0,pollTimer=0,frame=0,last=0,disposed=false;
+ let token='',dragMode='bridge',autoVoice=false,micBusy=false,polling=false,phase='idle',mood='neutral',avatarStyle='human',signal=0,pollTimer=0,frame=0,last=0,disposed=false;
+ let gaze=[0,0],targetGaze=[0,0];
+ canvas.addEventListener('pointermove',e=>{if(e.buttons)return;const r=canvas.getBoundingClientRect();targetGaze=[Math.max(-1,Math.min(1,(e.clientX-r.left)/r.width*2-1)),Math.max(-1,Math.min(1,1-(e.clientY-r.top)/r.height*2))];});
+ canvas.addEventListener('pointerleave',()=>{targetGaze=[0,0];});
  const shell=document.querySelector('.avatar-shell');let controlsTimer=0;
  shell.addEventListener('pointerenter',()=>{clearTimeout(controlsTimer);shell.classList.add('controls-open');});
  shell.addEventListener('pointerleave',()=>{clearTimeout(controlsTimer);controlsTimer=setTimeout(()=>shell.classList.remove('controls-open'),600);});
@@ -17,6 +20,7 @@
  $('interrupt').onclick=async()=>{try{const r=await fetch('/api/handsfree/interrupt',{method:'POST',headers:{'X-Nexus-Token':token,'Content-Type':'application/json'},body:'{}'});const data=await r.json();if(!r.ok)throw Error(data.detail);poll();}catch(e){$('phase').title=e.message;}};
  $('close').onclick=()=>action('close');$('dashboard').onclick=()=>action('dashboard');
  function status(data){
+  avatarStyle=data.avatar_style==='robot'?'robot':'human';
   mood=['happy','caring','curious','friendly'].includes(data.emotion)?data.emotion:'neutral';canvas.dataset.emotion=mood;
   token=data.token;dragMode=data.drag_mode||'bridge';const voice=data.voice||{},tts=data.tts||{},hf=data.handsfree||{};autoVoice=!!hf.active;$('interrupt').disabled=!hf.active||hf.phase!=='speaking';$('mic').dataset.active=String(autoVoice);$('mic').setAttribute('aria-label',autoVoice?'Pause auto voice':data.voice_muted?'Unmute and start auto voice':'Start auto voice');$('mic').title=autoVoice?(hf.interrupt_mode==='any'?'Auto voice ON — speak to interrupt; headphones reduce echo':hf.interrupt_mode==='wake'?'Auto voice ON — say Nexus ruko to interrupt':'Auto voice ON — use Stop & listen to interrupt'):data.voice_muted?'Unmute and start auto voice — Google mode sends clips online':'Start auto voice — Google mode sends clips online';
   phase=data.emergency?'emergency':hf.phase==='error'?'error':hf.active?(hf.phase==='approval'?'approval':hf.phase==='speaking'?'speaking':hf.phase==='thinking'?'thinking':voice.phase==='calibrating'?'calibrating':'listening'):voice.phase==='error'?'error':['calibrating','listening'].includes(voice.phase)?voice.phase:voice.phase==='transcribing'||data.thinking?'thinking':tts.phase==='speaking'?'speaking':'idle';
@@ -33,9 +37,9 @@
  try{
   const program=gl.createProgram();
   gl.attachShader(program,shader(gl.VERTEX_SHADER,`attribute vec3 aPosition;attribute vec3 aNormal;uniform mat4 uModel;uniform float uAspect;varying vec3 vNormal;varying vec3 vPosition;void main(){vec3 p=(uModel*vec4(aPosition,1.)).xyz;float d=4.2-p.z;gl_Position=vec4(p.x*2.7/uAspect,p.y*2.7,d*.96-.2,d);vNormal=normalize(mat3(uModel)*aNormal);vPosition=p;}`));
-  gl.attachShader(program,shader(gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 vNormal;varying vec3 vPosition;uniform vec3 uColor;uniform float uGlow;void main(){vec3 n=normalize(vNormal);float light=max(0.,dot(n,normalize(vec3(-.5,.8,1.))));float rim=pow(1.-max(0.,dot(n,normalize(vec3(0.,0.,4.2)-vPosition))),2.);float shine=pow(max(0.,dot(reflect(-normalize(vec3(-.5,.8,1.)),n),normalize(vec3(0.,0.,4.2)-vPosition))),24.);vec3 color=uColor*(.2+light*.65+uGlow)+vec3(.05,.6,.8)*rim*.8+vec3(.6,.9,1.)*shine*.5;gl_FragColor=vec4(color,1.);}`));
+  gl.attachShader(program,shader(gl.FRAGMENT_SHADER,`precision mediump float;varying vec3 vNormal;varying vec3 vPosition;uniform vec3 uColor;uniform float uGlow;uniform float uSoft;void main(){vec3 n=normalize(vNormal);float light=max(0.,dot(n,normalize(vec3(-.5,.8,1.))));float rim=pow(1.-max(0.,dot(n,normalize(vec3(0.,0.,4.2)-vPosition))),2.);float shine=pow(max(0.,dot(reflect(-normalize(vec3(-.5,.8,1.)),n),normalize(vec3(0.,0.,4.2)-vPosition))),24.);vec3 color=uColor*(.2+light*.65+uGlow)+vec3(.05,.6,.8)*rim*.8+vec3(.6,.9,1.)*shine*(.5-uSoft*.34);gl_FragColor=vec4(color,1.);}`));
   gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error('3D program unavailable');gl.useProgram(program);
-  const loc={p:gl.getAttribLocation(program,'aPosition'),n:gl.getAttribLocation(program,'aNormal'),model:gl.getUniformLocation(program,'uModel'),color:gl.getUniformLocation(program,'uColor'),glow:gl.getUniformLocation(program,'uGlow'),aspect:gl.getUniformLocation(program,'uAspect')};
+  const loc={p:gl.getAttribLocation(program,'aPosition'),n:gl.getAttribLocation(program,'aNormal'),model:gl.getUniformLocation(program,'uModel'),color:gl.getUniformLocation(program,'uColor'),glow:gl.getUniformLocation(program,'uGlow'),aspect:gl.getUniformLocation(program,'uAspect'),soft:gl.getUniformLocation(program,'uSoft')};
   function mesh(vertices){const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW);return {buffer:b,count:vertices.length/6};}
   function surface(fn,rows,cols){const vertices=[];for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){const q=[fn(i/rows,j/cols),fn((i+1)/rows,j/cols),fn((i+1)/rows,(j+1)/cols),fn(i/rows,(j+1)/cols)];for(const index of [0,1,2,0,2,3])vertices.push(...q[index]);}return mesh(vertices);}
   const sphere=surface((u,v)=>{const a=u*Math.PI,b=v*Math.PI*2,x=Math.sin(a)*Math.cos(b),y=Math.cos(a),z=Math.sin(a)*Math.sin(b);return [x,y,z,x,y,z];},20,32);
@@ -49,13 +53,19 @@
   const rotateX=a=>[1,0,0,0,0,Math.cos(a),Math.sin(a),0,0,-Math.sin(a),Math.cos(a),0,0,0,0,1];
   const rotateZ=a=>[Math.cos(a),Math.sin(a),0,0,-Math.sin(a),Math.cos(a),0,0,0,0,1,0,0,0,0,1];
   function draw(mesh,model,color,glow=0){gl.bindBuffer(gl.ARRAY_BUFFER,mesh.buffer);gl.vertexAttribPointer(loc.p,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(loc.n,3,gl.FLOAT,false,24,12);gl.uniformMatrix4fv(loc.model,false,new Float32Array(model));gl.uniform3fv(loc.color,color);gl.uniform1f(loc.glow,glow);gl.drawArrays(gl.TRIANGLES,0,mesh.count);}
+  const human=window.createNexusHumanFace?.({surface,draw,mul,translate,rotateZ,rotateY,scale,eye});
   gl.enableVertexAttribArray(loc.p);gl.enableVertexAttribArray(loc.n);gl.enable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);
   let frames=0,lastStatic='';
   function render(now){if(disposed||gl.isContextLost())return;frame=requestAnimationFrame(render);const active=['listening','thinking','speaking'].includes(phase),interval=1000/(active?24:15);if(now-last<interval)return;last=now;
-   const ratio=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}const moving=motion()&&!document.hidden&&phase!=='emergency',staticKey=[phase,mood,signal.toFixed(3),w,h].join(':');if(!moving&&lastStatic===staticKey)return;lastStatic=moving?'':staticKey;gl.viewport(0,0,w,h);gl.uniform1f(loc.aspect,w/h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+   const ratio=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}const moving=motion()&&!document.hidden&&phase!=='emergency',staticKey=[phase,mood,avatarStyle,signal.toFixed(3),w,h].join(':');if(!moving&&lastStatic===staticKey)return;lastStatic=moving?'':staticKey;gl.viewport(0,0,w,h);gl.uniform1f(loc.aspect,w/h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
    const t=moving?now*.0018:0,float=moving?Math.sin(t*1.5)*.055:0,pulse=phase==='listening'?signal*.07:phase==='speaking'&&moving?(.5+.5*Math.sin(t*9))*.045:0;
-   const root=mul(translate(0,float,0),mul(rotateY(moving?Math.sin(t*.65)*.25:0),scale(1+pulse,1+pulse,1+pulse)));
+   const breathing=avatarStyle==='human'?(phase==='listening'?signal*.012:0):pulse;gl.uniform1f(loc.soft,avatarStyle==='human'?1:0);
+   const root=mul(translate(0,float,0),mul(rotateY(moving?Math.sin(t*.65)*.25:0),scale(1+breathing,1+breathing,1+breathing)));
    const tint=phase==='listening'?[.04,.95,.65]:phase==='thinking'?[.55,.25,.95]:phase==='speaking'?[.15,.8,1]:phase==='approval'?[1,.64,.1]:phase==='error'||phase==='emergency'?[1,.25,.2]:[.02,.65,.95];
+   if(avatarStyle==='human'&&human){
+    gaze=moving?gaze.map((v,i)=>v+(targetGaze[i]-v)*.12):[0,0];human({root,t,moving,phase,mood,tint,gaze});canvas.dataset.style='human';
+   }else{
+   canvas.dataset.style='robot';
    draw(sphere,mul(root,scale(.70,.76,.63)),[.025,.13,.22]);
    for(const x of [-.76,.76])draw(sphere,mul(root,mul(translate(x,0,0),scale(.085,.20,.13))),tint,.25);
    const blink=moving&&(t%5)>4.84?.12:1;
@@ -64,7 +74,8 @@
    for(const x of [-.13,0,.13])draw(eye,mul(root,mul(translate(x,-.22+(emotion==='happy'||emotion==='friendly'?x*x*1.8:emotion==='caring'?-x*x:0),.60),scale(.085,.026,1))),tint,.6);
    draw(ring,mul(translate(0,float,0),mul(rotateY(t*.4),rotateX(1.05))),tint,.35);
    draw(ring,mul(translate(0,float,0),mul(rotateZ(-.55+t*.18),rotateY(.72))),[.06,.32,.65],.15);
-   canvas.dataset.frames=String(++frames);canvas.dataset.renderer='webgl';
+   }
+   canvas.dataset.frames=String(++frames);canvas.dataset.renderer='webgl';canvas.dataset.pose=[canvas.dataset.style,phase,mood].join(':');
   }
   frame=requestAnimationFrame(render);
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();cancelAnimationFrame(frame);fallback('3D paused · graphics context lost');});canvas.addEventListener('webglcontextrestored',()=>location.reload());
