@@ -99,6 +99,14 @@ class WhatsApp:
         self.drafts={key:value for key,value in self.drafts.items() if value['expires']>self.clock()}
         if len(self.drafts)>=100:raise ValueError('Too many recent drafts. Wait for old drafts to expire.')
 
+    @staticmethod
+    def _recipient_key(value):
+        phone=value.get('recipient_phone','')
+        if phone:return 'phone:'+phone
+        ident=value.get('recipient_id','')
+        match=re.fullmatch(r'(\d+)@(?:c\.us|s\.whatsapp\.net)',ident)
+        return 'phone:+'+match[1] if match else ident
+
     def prepare(self,contact,message):
         contact,message=str(contact).strip(),str(message).replace('\r\n','\n').strip()
         if not contact or len(contact)>100 or not message or len(message)>4000:raise ValueError('Contact and a message of 1–4000 characters are required.')
@@ -120,14 +128,26 @@ class WhatsApp:
                 selected=self._call('select',{'contact':exact[0]['name']})
                 if selected.get('status')!='selected':return {**selected,'sent':False}
                 contact=exact[0]['name']
-            deadline=self.clock()+12;previous=None;stable=0
+            deadline=self.clock()+12;previous=None;stable=0;info_requested=False;info_reason=''
             while self.clock()<deadline:
                 try:state=self._call('state')
                 except ValueError:self.sleep(.2);continue
+                core=state.get('status')=='ready' and state.get('recipient') and state.get('composer') is not None
+                if core and not is_phone:core=name_key(state['recipient'])==name_key(contact)
+                if core and not state.get('recipient_id'):
+                    if not info_requested:
+                        opened=self._call('open_contact_info',{'contact':state['recipient']})
+                        info_requested=opened.get('status') in ('opening_contact_info','contact_info_open','contact_info_closing')
+                        info_reason=opened.get('reason','')
+                    if info_requested:
+                        proof=self._call('verify_contact_info',{'contact':state['recipient'],'phone':phone if is_phone else ''})
+                        info_reason=proof.get('reason','')
+                        if proof.get('status')=='blocked':return {'status':'blocked','sent':False,'reason':info_reason}
+                        if proof.get('status')=='contact_verified':state=self._call('state')
                 valid=state.get('status')=='ready' and state.get('recipient_id') and state.get('composer') is not None
-                if is_phone:valid=valid and state['recipient_id'].split('@')[0]==phone and state['recipient_id'].endswith(('@c.us','@s.whatsapp.net'))
+                if is_phone:valid=valid and (state.get('recipient_phone')=='+'+phone or state['recipient_id'].split('@')[0]==phone and state['recipient_id'].endswith(('@c.us','@s.whatsapp.net')))
                 else:valid=valid and name_key(state.get('recipient',''))==name_key(contact)
-                identity=(state.get('session'),state.get('recipient'),state.get('recipient_id'))
+                identity=tuple(state.get(k) for k in ('session','recipient','recipient_id','context'))
                 stable=stable+1 if valid and identity==previous else 0;previous=identity
                 if valid and stable>=2:break
                 self.sleep(.2)
@@ -136,17 +156,17 @@ class WhatsApp:
                 failures=[]
                 if not state.get('recipient'):failures.append('chat header not found')
                 elif not is_phone and name_key(state['recipient'])!=name_key(contact):failures.append('open chat name does not match the requested contact')
-                if not state.get('recipient_id'):failures.append('chat identifier missing or ambiguous')
+                if not state.get('recipient_id'):failures.append(info_reason or 'chat identifier missing or ambiguous; Contact info number was not verified')
                 if state.get('composer') is None:failures.append('unique message input not found')
                 return {'status':'blocked','sent':False,'reason':'WhatsApp verification failed: '+', '.join(failures or ['chat did not become stable'])+'. No message was sent. Use Check WhatsApp / send status in WhatsApp Center for verification details.','verification':checks}
             for old_id,old in self.drafts.items():
-                if old['recipient_id']==state['recipient_id'] and old['message']==message and old['state'] not in ('prepared','cancelled','blocked'):
+                if self._recipient_key(old)==self._recipient_key(state) and old['message']==message and old['state'] not in ('prepared','cancelled','blocked'):
                     return {'status':'already_attempted','draft_id':old_id,'sent':old.get('receipt',{}).get('sent'),'retry_allowed':False,'message':'This message already has a send attempt. Check its status; do not resend automatically.'}
-            pinned={k:state[k] for k in ('session','recipient','recipient_id')}
+            pinned={k:state[k] for k in ('session','recipient','recipient_id','context') if k in state}
             self._call('scroll_bottom')
             self.sleep(.3);state=self._call('state')
             if not state.get('at_bottom') or any(state.get(k)!=v for k,v in pinned.items()):return {'status':'blocked','sent':False,'reason':'Latest chat history could not be verified. Scroll to the bottom and prepare again.'}
-            draft={k:state[k] for k in ('session','recipient','recipient_id')};draft.update(message=message,approval_before=[m['id'] for m in state.get('outgoing',[]) if m.get('id')])
+            draft={**pinned,**{k:state[k] for k in ('recipient_phone',) if state.get(k)}};draft.update(message=message,approval_before=[m['id'] for m in state.get('outgoing',[]) if m.get('id')])
             composed=self._call('compose',draft)
             if composed.get('status')!='composed' or composed.get('composer')!=message:return {'status':'blocked','sent':False,'reason':composed.get('reason','Exact composer text was not verified.')}
             if self.paused.is_set():raise ValueError('Emergency Stop active.')
@@ -157,7 +177,7 @@ class WhatsApp:
         with self.lock:
             draft=self.drafts.get(ident)
             if not draft or draft['expires']<=self.clock() or draft['state']!='prepared':raise ValueError('WhatsApp draft expired, changed, or already attempted. Prepare a fresh message.')
-            return {'draft_id':ident,**{k:draft[k] for k in ('recipient','recipient_id','message')}}
+            return {'draft_id':ident,**{k:draft[k] for k in ('recipient','recipient_id','message','recipient_phone') if k in draft}}
 
     def cancel_draft(self,ident):
         with self.lock:
@@ -170,6 +190,7 @@ class WhatsApp:
     def _receipt(self,ident):
         draft=self.drafts[ident];state=self._call('state')
         if any(state.get(k)!=draft[k] for k in ('session','recipient','recipient_id')):return {'status':'unknown','sent':None,'reason':'Chat changed; check WhatsApp manually.'}
+        if draft.get('context') and state.get('context')!=draft['context']:return {'status':'unknown','sent':None,'reason':'Verified contact context changed; check WhatsApp manually.'}
         matches=[m for m in state.get('outgoing',[]) if m.get('id') and m['id'] not in draft['before'] and m.get('text')==draft['message']]
         if draft['sent_message_id']:matches=[m for m in matches if m['id']==draft['sent_message_id']]
         if len(matches)!=1:return {'status':'unknown','sent':None,'reason':'A unique new outgoing message has not been verified.'}
@@ -183,7 +204,7 @@ class WhatsApp:
             self.approval(ident)
             if self.paused.is_set():raise ValueError('Emergency Stop active.')
             draft=self.drafts[ident]
-            if any(other is not draft and other['expires']>self.clock() and other['state']=='attempted' and other['recipient_id']==draft['recipient_id'] and other['message']==draft['message'] for other in self.drafts.values()):
+            if any(other is not draft and other['expires']>self.clock() and other['state']=='attempted' and self._recipient_key(other)==self._recipient_key(draft) and other['message']==draft['message'] for other in self.drafts.values()):
                 raise ValueError('This message already has a send attempt. Check WhatsApp; do not resend automatically.')
             draft['state']='attempted';draft['receipt']={'status':'unknown','sent':None,'reason':'Send result not yet verified.'}
             try:

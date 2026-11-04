@@ -35,17 +35,22 @@ def main():
                 else:raise AssertionError('Local fixture marker missing; never run messaging automation on an unverified page')
                 nested=(fixtures/'nested.js').read_text(encoding='utf-8')
                 assert window.evaluate_js('('+nested+')()') is True
+                opaque=(fixtures/'opaque.js').read_text(encoding='utf-8')
+                assert window.evaluate_js('('+opaque+')()') is True
                 assert window.evaluate_js("document.querySelectorAll('#history .message-in,#history .message-out').length")==0
                 layout=capture(window)
-                assert layout['main']['prefixed_ids']>=1 and layout['main']['message_classes']==0
+                assert layout['main']['prefixed_ids']==0 and layout['main']['data_ids']==22 and layout['main']['message_containers']==22 and layout['main']['message_classes']==0
                 import json
                 safe=json.dumps(layout)
-                assert '923001234567' not in safe and 'Saad Cheema' not in safe and 'Old message' not in safe
+                assert '12025550101' not in safe and 'Nexus Test Contact' not in safe and 'Old message' not in safe
                 assert window.evaluate_js('window.clicks')==0
                 # Only attach after proving this page is the isolated local fixture.
                 wa.window=window
-                draft=wa.prepare('Saad Cheema','Fixture message only')
+                draft=wa.prepare('Nexus Test Contact','Fixture message only')
                 assert draft['status']=='draft_prepared',draft
+                assert draft['recipient_phone']=='+12025550101' and draft['recipient_id']=='phone:+12025550101',draft
+                private_safe=json.dumps(capture(window))
+                assert '12025550101' not in private_safe and 'Nexus Test Contact' not in private_safe
                 assert window.evaluate_js('window.clicks')==0,'Preparation must never send'
                 approval=wa.approval(draft['draft_id']);wa.verify_approval(approval)
                 sent=wa.send(draft['draft_id'])
@@ -53,12 +58,12 @@ def main():
                 assert window.evaluate_js('window.clicks')==1
                 try:wa.send(draft['draft_id']);raise AssertionError('Consumed draft was sent twice')
                 except ValueError:pass
-                fresh=wa.prepare('Saad Cheema','Second local fixture draft')
+                fresh=wa.prepare('Nexus Test Contact','Second local fixture draft')
                 assert fresh['status']=='draft_prepared',fresh
                 window.evaluate_js("document.querySelector('#composer').textContent='User edited this draft'")
                 blocked=wa.send(fresh['draft_id'])
                 assert blocked['sent'] is False and window.evaluate_js('window.clicks')==1,blocked
-                print('Native WebView2 LOCAL FIXTURE: class-free history, nested IDs/wrapped inputs, exact contact/draft, approval snapshot, one send/tick, replay and edited-draft guards passed; no real account/messages',flush=True)
+                print('Native WebView2 LOCAL FIXTURE: 22 opaque IDs with no legacy prefixes/classes, live Contact info phone, exact approval, one send/tick, replay and edited-draft guards passed; no real account/messages',flush=True)
             except BaseException:
                 errors.append(traceback.format_exc());print(errors[-1],flush=True)
             finally:

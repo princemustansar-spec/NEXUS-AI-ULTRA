@@ -8,7 +8,7 @@ function nestedWhatsAppFixture(){
  for(const row of document.querySelectorAll('.message-in,.message-out')){
   const content=document.createElement('div');content.dataset.id=row.dataset.id;delete row.dataset.id;
   content.append(...row.childNodes);row.append(content);
-  const quote=document.createElement('div');quote.dataset.testid='quoted-message';quote.dataset.id='false_999999999999@c.us_QUOTED';content.append(quote);
+  const quote=document.createElement('div');quote.dataset.testid='quoted-message';quote.dataset.id='false_12025550199@c.us_QUOTED';content.append(quote);
   row.classList.remove('message-in','message-out');row.setAttribute('role','row');
  }
  return true;

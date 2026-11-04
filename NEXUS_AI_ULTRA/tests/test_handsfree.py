@@ -69,6 +69,18 @@ def test_actual_pending_tool_requires_spoken_confirmation(fast):
     assert 'create_text' in prompt and 'C:/Docs/note.txt' in prompt
     assert any('Pehle pending' in text for text in hf.tts.spoken)
 
+def test_whatsapp_voice_review_reads_contact_number_and_exact_message(fast):
+    items=[]
+    async def chat(text,paid):
+        items.append({'id':'approval','name':'whatsapp_send','args':{'draft_id':'private-draft-token','recipient':'Nexus Test Contact','recipient_id':'phone:+12025550101','recipient_phone':'+12025550101','message':'Kidhar ho?'}})
+        return {'text':'Approval pending.'}
+    async def approve(ident,yes):items.clear();return {'result':{'sent':True,'delivery_verified':False}}
+    hf,events=build(['message bhejo','haan approve','mic band karo'],chat,approve,lambda:list(items))
+    async def run():await hf.start(True,True);await hf.task
+    asyncio.run(run())
+    prompt=next(text for kind,text in events if kind=='speak' and 'Approval chahiye' in text)
+    assert 'Nexus Test Contact' in prompt and '+12025550101' in prompt and 'Kidhar ho?' in prompt and 'private-draft-token' not in prompt
+
 
 def test_paid_permission_is_for_one_turn_only(fast):
     calls=[]

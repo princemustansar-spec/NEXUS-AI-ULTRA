@@ -219,6 +219,8 @@ class HandsFree:
         if not items:return
         item=items[0]
         details=json.dumps(item['args'],ensure_ascii=False)
+        if item['name']=='whatsapp_send':
+            args=item['args'];details='Contact: '+args.get('recipient','')+('. Number: '+args['recipient_phone'] if args.get('recipient_phone') else '')+'. Message: '+args.get('message','')
         self.confirmation={'kind':'tool',**item}
         await self._say('Approval chahiye. Action: '+item['name']+'. Details: '+details+'. Karna hai to haan approve kahein, warna nahi cancel kahein.')
 

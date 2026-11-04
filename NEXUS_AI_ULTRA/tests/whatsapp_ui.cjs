@@ -11,8 +11,8 @@ const root=path.resolve(__dirname,'..');
   if(p.startsWith('/api/')){
    assert.equal(route.request().headers()['x-nexus-token'],'fixture');const body=route.request().postDataJSON();
    if(p==='/api/tools/whatsapp_open')return route.fulfill({json:{result:{status:'login_required',reason:'Scan QR in NEXUS WhatsApp'}}});
-   if(p==='/api/tools/whatsapp_prepare'){assert.equal(body.contact,'Saad Cheema');assert.equal(body.message,'Kidhar ho?');return route.fulfill({json:{result:{status:'draft_prepared',draft_id:'fixture-draft',recipient:'Saad Cheema',message:'Kidhar ho?',sent:false}}});}
-   if(p==='/api/tools/whatsapp_send'){assert.equal(body.draft_id,'fixture-draft');state.pending=[{id:'approval-one',name:'whatsapp_send',args:{draft_id:'fixture-draft',recipient:'Saad Cheema',recipient_id:'923001234567@c.us',message:'Kidhar ho?'}}];return route.fulfill({json:{approval_required:true,id:'approval-one',args:state.pending[0].args}});}
+   if(p==='/api/tools/whatsapp_prepare'){assert.equal(body.contact,'Nexus Test Contact');assert.equal(body.message,'Kidhar ho?');return route.fulfill({json:{result:{status:'draft_prepared',draft_id:'fixture-draft',recipient:'Nexus Test Contact',message:'Kidhar ho?',sent:false}}});}
+   if(p==='/api/tools/whatsapp_send'){assert.equal(body.draft_id,'fixture-draft');state.pending=[{id:'approval-one',name:'whatsapp_send',args:{draft_id:'fixture-draft',recipient:'Nexus Test Contact',recipient_id:'12025550101@c.us',message:'Kidhar ho?'}}];return route.fulfill({json:{approval_required:true,id:'approval-one',args:state.pending[0].args}});}
    if(p==='/api/approvals/approval-one'){assert(body.approve);sends++;state.pending=[];return route.fulfill({json:{result:{status:'sent_verified',sent:true,delivery_verified:false}}});}
    return route.fulfill({json:{result:{status:'ready'}}});
   }
@@ -21,8 +21,8 @@ const root=path.resolve(__dirname,'..');
  try{
   await page.goto('https://nexus.test/');await page.waitForFunction(()=>document.title==='NEXUS');await page.locator('#navigation [data-page="WhatsApp Center"]').click();
   await page.getByRole('button',{name:'Open WhatsApp / QR login',exact:true}).click();await page.locator('#whatsapp-output').getByText(/Scan QR/).waitFor();
-  await page.locator('#whatsapp-contact').fill('Saad Cheema');await page.locator('#whatsapp-message').fill('Kidhar ho?');await page.getByRole('button',{name:'Prepare & review send',exact:true}).click();
-  await page.getByRole('button',{name:'Approve this action',exact:true}).waitFor();assert.equal(sends,0);assert((await page.locator('#workspace').innerText()).includes('Saad Cheema'));assert((await page.locator('#workspace').innerText()).includes('Kidhar ho?'));
+  await page.locator('#whatsapp-contact').fill('Nexus Test Contact');await page.locator('#whatsapp-message').fill('Kidhar ho?');await page.getByRole('button',{name:'Prepare & review send',exact:true}).click();
+  await page.getByRole('button',{name:'Approve this action',exact:true}).waitFor();assert.equal(sends,0);assert((await page.locator('#workspace').innerText()).includes('Nexus Test Contact'));assert((await page.locator('#workspace').innerText()).includes('Kidhar ho?'));
   await page.getByRole('button',{name:'Approve this action',exact:true}).click();await page.locator('#result-content').getByText(/sent_verified/).waitFor();assert.equal(sends,1);assert.deepEqual(errors,[]);
   console.log('WhatsApp Center: QR prompt, exact contact/message review and approval-only send UI passed');
  }finally{await browser.close();}
