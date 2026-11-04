@@ -61,11 +61,13 @@ class PlaybackCues:
 def sapi_observer(engine, bridge, text):
     """Keep pyttsx3's own event sink intact; attach a second optional SAPI sink."""
     connection = None
-    def start(*_): bridge.begin('word-boundary')
-    def word(_name, location, length): bridge.word(text[int(location):int(location)+int(length)], length)
-    def end(*_): bridge.end()
+    def word(name=None, location=0, length=0, **_):
+        if int(length)<=0:return
+        if not bridge.active:bridge.begin('word-boundary')
+        bridge.word(text[int(location):int(location)+int(length)], length)
+    def end(*_, **__): bridge.end()
     try:
-        for event, callback in [('started-utterance',start),('started-word',word),('finished-utterance',end),('error',end)]:
+        for event, callback in [('started-word',word),('finished-utterance',end),('error',end)]:
             engine.connect(event,callback)
     except (AttributeError,TypeError,RuntimeError):
         return None
@@ -74,8 +76,13 @@ def sapi_observer(engine, bridge, text):
         from comtypes.gen import SpeechLib
         native = engine.proxy._driver._tts
         class Sink:
+            def _ISpeechVoiceEvents_StartStream(self, _stream, _position):
+                bridge.begin('word-boundary')
             def _ISpeechVoiceEvents_Viseme(self, _stream, _position, duration, _next, _feature, current):
+                if not bridge.active:bridge.begin('viseme')
                 bridge.viseme(current,duration)
+            def _ISpeechVoiceEvents_EndStream(self, _stream, _position):
+                bridge.end()
         native.EventInterests |= SpeechLib.SVEViseme
         connection = GetEvents(native, Sink())
     except Exception:

@@ -20,6 +20,7 @@ def test_real_pygame_decode_and_playback_clock(monkeypatch):
 @pytest.mark.skipif(sys.platform!='win32',reason='Native Windows SAPI/COM requires Windows.')
 def test_real_sapi_visemes_with_file_output(tmp_path):
     import pyttsx3
+    from comtypes import COMError
     from comtypes.client import CreateObject
     from nexus.avatar_audio import PlaybackCues,sapi_observer
     engine=pyttsx3.init('sapi5');native=engine.proxy._driver._tts
@@ -27,7 +28,10 @@ def test_real_sapi_visemes_with_file_output(tmp_path):
     if not allowed:pytest.skip('No allowed Windows SAPI voice installed.')
     engine.setProperty('voice',allowed[0].id)
     destination=tmp_path/'synthetic-sapi.wav';stream=CreateObject('SAPI.SpFileStream');stream.Open(str(destination),3,False)
-    previous=native.AudioOutputStream;messages=[];bridge=PlaybackCues(messages.append);connection=sapi_observer(engine,bridge,'Hello Nexus. One two three.')
+    previous=None
+    try:previous=native.AudioOutputStream
+    except COMError:pass  # Hosted Windows runners may have no physical audio endpoint.
+    messages=[];bridge=PlaybackCues(messages.append);connection=sapi_observer(engine,bridge,'Hello Nexus. One two three.')
     try:
         native.AudioOutputStream=stream
         engine.say('Hello Nexus. One two three.');engine.startLoop(False);deadline=time.monotonic()+15
@@ -37,7 +41,8 @@ def test_real_sapi_visemes_with_file_output(tmp_path):
         engine.stop()
         try:engine.endLoop()
         except RuntimeError:pass
-        native.AudioOutputStream=previous;stream.Close()
+        if previous is not None:native.AudioOutputStream=previous
+        stream.Close()
         if connection:connection.disconnect()
     assert destination.stat().st_size>44
     assert connection is not None,'Pinned pyttsx3 SAPI event adapter could not attach.'

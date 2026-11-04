@@ -67,10 +67,12 @@ def test_additional_sapi_sink_preserves_word_callbacks(monkeypatch):
     monkeypatch.setitem(sys.modules,'comtypes.gen',SimpleNamespace(SpeechLib=SimpleNamespace(SVEViseme=256)))
     messages=[];bridge=PlaybackCues(messages.append)
     assert sapi_observer(engine,bridge,'Hello') is connection
-    handlers['started-utterance']('fixture');handlers['started-word']('fixture',0,5)
+    handlers['started-word'](name='fixture',location=1,length=0);assert not messages
+    sinks[0]._ISpeechVoiceEvents_StartStream(1,0)
+    handlers['started-word'](name='fixture',location=0,length=5)
     sinks[0]._ISpeechVoiceEvents_Viseme(1,0,100,0,0,7)
     assert bridge.mode=='viseme' and native.EventInterests==288
-    handlers['finished-utterance']('fixture',True);assert not messages[-1]['animation']['playing']
+    handlers['finished-utterance'](name='fixture',completed=True);assert not messages[-1]['animation']['playing']
 
 def test_terminal_voice_state_discards_old_cues(tmp_path):
     from nexus.voice import VoiceService
