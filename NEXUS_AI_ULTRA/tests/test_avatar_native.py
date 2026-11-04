@@ -28,18 +28,21 @@ def _sapi_file_worker(destination,results):
         engine=pyttsx3.init('sapi5');native=engine.proxy._driver._tts
         allowed=[v for v in engine.getProperty('voices') if not any(s in (v.name+' '+v.id).lower() for s in ('asad','uzma'))]
         if not allowed:results.put({'skip':'No allowed Windows SAPI voice installed.'});return
-        engine.setProperty('voice',allowed[0].id)
-        engine.runAndWait()  # Apply the queued voice before redirecting its output.
+        for token in native.GetVoices():
+            if token.Id==allowed[0].id:native.Voice=token;break
+        # Exercise the real SAPI connection directly. pyttsx3 keyword callback
+        # contracts are tested separately; its queue is not a file-output clock.
+        engine.proxy._driver._current_text='Hello Nexus. One two three.'
         stream=CreateObject('SAPI.SpFileStream');stream.Open(destination,3,False);previous=None
         try:previous=native.AudioOutputStream
         except COMError:pass  # Hosted runners may have no physical audio endpoint.
         messages=[];bridge=PlaybackCues(messages.append);connection=sapi_observer(engine,bridge,'Hello Nexus. One two three.')
         try:
             native.AudioOutputStream=stream
-            engine.say('Hello Nexus. One two three.');engine.startLoop(False);deadline=time.monotonic()+12
+            native.Speak('Hello Nexus. One two three.',1);deadline=time.monotonic()+12
             completed=False
             while time.monotonic()<deadline:
-                engine.iterate()
+                pythoncom.PumpWaitingMessages()
                 if native.WaitUntilDone(20):
                     # File output can finish before pyttsx3's busy flag reflects
                     # the stream. Drain COM events before closing the file.
@@ -47,9 +50,7 @@ def _sapi_file_worker(destination,results):
                     completed=True;break
                 time.sleep(.01)
         finally:
-            engine.stop()
-            try:engine.endLoop()
-            except RuntimeError:pass
+            native.Speak('',3)
             if previous is not None:native.AudioOutputStream=previous
             stream.Close()
             if connection:connection.disconnect()
