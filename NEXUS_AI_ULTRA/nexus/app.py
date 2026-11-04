@@ -147,7 +147,7 @@ def avatar_status():
     v, t = voice.status(), tts.status()
     return dict(token=session_token, available=avatar.available(), drag_mode='native' if avatar.can_native_drag() else 'bridge', voice_muted=store.get('voice_muted',False),
                 voice={k:v[k] for k in ('phase','level_dbfs') if k in v},
-                tts={'phase':t.get('phase','idle')}, handsfree=handsfree.status(), thinking=chat_lock.locked(), emergency=emergency,emotion=tools.personal.mood())
+                tts={'phase':t.get('phase','idle')}, handsfree=handsfree.status(), thinking=chat_lock.locked(), emergency=emergency,emotion=tools.personal.mood(),avatar_style=tools.personal.profile()['avatar_style'])
 
 @app.post('/api/avatar/{action}')
 async def avatar_action(action: str):
