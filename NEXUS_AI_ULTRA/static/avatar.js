@@ -9,7 +9,7 @@
  const motion=()=>{const p=localStorage.getItem('core-motion')||'system';return p==='on'||(p!=='off'&&!media.matches);};
  const humanCanvas=document.createElement('canvas');humanCanvas.id='human-floating';humanCanvas.setAttribute('aria-label','Human NEXUS avatar');humanCanvas.hidden=true;
  let humanActive=false;
- const human=new NexusHumanClient(humanCanvas,{motion,background:true,onError:()=>{canvas.dataset.humanError=humanCanvas.dataset.error||'Portrait unavailable';},onActive:on=>{humanActive=on;if(on){document.querySelector('.scene').append(humanCanvas);canvas.style.opacity='0';humanCanvas.style.pointerEvents=gl?'none':'auto';$('fallback').hidden=true;}else{humanCanvas.remove();canvas.style.opacity='';if(!gl)$('fallback').hidden=false;}}});
+ const human=new NexusHumanClient(humanCanvas,{motion,onError:()=>{canvas.dataset.humanError=humanCanvas.dataset.error||'Portrait unavailable';},onActive:on=>{humanActive=on;if(on){document.querySelector('.scene').append(humanCanvas);canvas.style.opacity='0';humanCanvas.style.pointerEvents=gl?'none':'auto';$('fallback').hidden=true;}else{humanCanvas.remove();canvas.style.opacity='';if(!gl)$('fallback').hidden=false;}}});
  humanCanvas.addEventListener('pointerdown',e=>{if(e.button===0&&dragMode==='native'&&token){e.preventDefault();action('drag');}});
  canvas.addEventListener('pointermove',e=>{if(human.renderer)human.renderer.look=Math.max(-1,Math.min(1,e.offsetX/canvas.clientWidth*2-1));});
  addEventListener('beforeunload',()=>human.dispose());

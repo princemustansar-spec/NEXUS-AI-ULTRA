@@ -38,9 +38,10 @@ window.NexusHumanRenderer = class {
     point+=head*(turned-delta);
     point.y+=(1.-head)*uBreath*(point.y-uSource.y);
     point.x+=(1.-head)*uBreath*.18*(point.x-uSource.x*.5);
-    float cheek=exp(-pow((aPosition.x-.5)/.21,2.)-pow((aPosition.y-.45)/.07,2.));
+    vec2 cheekDelta=(aPosition-vec2(.5,.45))/vec2(.21,.07);float cheek=exp(-dot(cheekDelta,cheekDelta));
     if(uMood==1.)point.y-=cheek*uSource.y*.002;
-    if(uMood==3.)point.y-=exp(-pow((aPosition.x-.57)/.07,2.)-pow((aPosition.y-.34)/.04,2.))*uSource.y*.003;
+    vec2 browDelta=(aPosition-vec2(.57,.34))/vec2(.07,.04);
+    if(uMood==3.)point.y-=exp(-dot(browDelta,browDelta))*uSource.y*.003;
     vec2 screen=(point-uSource*.5)*uFit*2./uView;gl_Position=vec4(screen.x,-screen.y,0.,1.);
    }`));
   gl.attachShader(p,shader(gl.FRAGMENT_SHADER,`precision mediump float;uniform sampler2D uImage;varying vec2 vUV;void main(){gl_FragColor=texture2D(uImage,vUV);}`));
@@ -53,7 +54,7 @@ window.NexusHumanRenderer = class {
   this.texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
   gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.clearColor(0,0,0,0);
  }
- setState(packet){this.packet=packet;this.phase=packet.phase||'idle';this.emotion=packet.emotion||'neutral';this.received=performance.now();}
+ setState(packet){this.packet=packet;this.phase=packet.phase||'idle';this.emotion=packet.emotion||'neutral';this.received=performance.now();if((packet.blocked||this.phase!=='speaking'||!packet.animation?.playing)&&Number(this.canvas.dataset.pose)>0)this.draw((this.received-this.start)/1000,this.received);}
  audioAt(now){
   const a=this.packet.animation||{};
   if(!a.playing||this.phase!=='speaking'||now-this.received>600||!Array.isArray(a.cues)||a.cues.length<2)return {pose:0,level:0};
@@ -65,7 +66,7 @@ window.NexusHumanRenderer = class {
   return {pose:level>.08?current[2]:0,level};
  }
  draw(seconds,now=performance.now()){
-  if((document.hidden&&!this.options.background)||!this.canvas.clientWidth||!this.canvas.clientHeight)return;
+  if(document.hidden||!this.canvas.clientWidth||!this.canvas.clientHeight)return;
   const motion=this.playing&&(!this.options.motion||this.options.motion())&&this.phase!=='emergency';
   const ratio=Math.min(devicePixelRatio||1,1.25),cw=Math.round(this.canvas.clientWidth*ratio),ch=Math.round(this.canvas.clientHeight*ratio);
   if(this.canvas.width!==cw||this.canvas.height!==ch){this.canvas.width=cw;this.canvas.height=ch;this.textureKey='';}

@@ -44,6 +44,7 @@ def main():
                     time.sleep(.1)
                 else:raise AssertionError('Avatar telemetry did not become ready')
                 if human_mode:
+                    window.evaluate_js("localStorage.setItem('core-motion','on');dispatchEvent(new StorageEvent('storage'));")
                     deadline=time.monotonic()+15
                     while time.monotonic()<deadline:
                         if window.evaluate_js("Number(document.querySelector('#human-floating')?.dataset.frames)>1"):break

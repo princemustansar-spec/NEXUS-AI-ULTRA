@@ -48,6 +48,7 @@ const rig={eyes:[[0,[.35,.335,.16,.115],[.352,.333,.122,.093]],[0,[.51,.335,.16,
   await page.waitForFunction(()=>document.querySelector('#human-core').dataset.pose==='2');
   await page.waitForTimeout(650);assert.equal(await page.locator('#human-core').getAttribute('data-pose'),'0','missing or expired cues close the mouth');
   await emit(idle);await page.waitForFunction(()=>document.querySelector('#human-core').dataset.phase==='idle');
+  for(const emotion of ['happy','curious']){await emit({...idle,emotion});await page.waitForTimeout(120);assert((await page.locator('#human-core').screenshot()).length>2500,'Emotion shaders must keep the portrait visible');}await emit(idle);
   await page.evaluate(()=>{localStorage.setItem('core-motion','off');});await page.waitForTimeout(120);const before=await page.locator('#human-core').screenshot();await page.waitForTimeout(250);assert(before.equals(await page.locator('#human-core').screenshot()),'Motion Off holds a stable portrait');
   await page.evaluate(()=>localStorage.setItem('core-motion','on'));
   await page.evaluate(()=>{window.testUtterance=new SpeechSynthesisUtterance('Hello');attachNexusHumanVoice(testUtterance,'Hello');testUtterance.dispatchEvent(new Event('start'));const e=new Event('boundary');Object.defineProperties(e,{name:{value:'word'},charIndex:{value:0},charLength:{value:5}});testUtterance.dispatchEvent(e);window.testWordTimer=setInterval(()=>testUtterance.dispatchEvent(e),90);});
