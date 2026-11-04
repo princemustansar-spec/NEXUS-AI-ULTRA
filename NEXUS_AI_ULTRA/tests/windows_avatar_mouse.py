@@ -48,7 +48,12 @@ def main():
                     while time.monotonic()<deadline:
                         if window.evaluate_js("Number(document.querySelector('#human-floating')?.dataset.frames)>1"):break
                         time.sleep(.1)
-                    else:raise AssertionError('Human avatar did not render in native WebView2')
+                    else:
+                        result['human_debug']=window.evaluate_js("({hidden:document.hidden,state:document.visibilityState,client:typeof NexusHumanClient,renderer:typeof NexusHumanRenderer,error:document.querySelector('#avatar').dataset.humanError,canvas:document.querySelector('#human-floating')?{frames:document.querySelector('#human-floating').dataset.frames,width:document.querySelector('#human-floating').clientWidth,height:document.querySelector('#human-floating').clientHeight}:null})")
+                        from nexus.app import human_avatar
+                        result['profile']=human_avatar.status()
+                        print(json.dumps(result),flush=True)
+                        raise AssertionError('Human avatar did not render in native WebView2')
                     result['human_renderer']=window.evaluate_js("document.querySelector('#human-floating').dataset.renderer")
                 window.move(220,180)
                 window.evaluate_js("window.mouseProbe={pointer:0,mouse:0};document.addEventListener('pointerdown',()=>mouseProbe.pointer++,true);document.addEventListener('mousedown',()=>mouseProbe.mouse++,true);")

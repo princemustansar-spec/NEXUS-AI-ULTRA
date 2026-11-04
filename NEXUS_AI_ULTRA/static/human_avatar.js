@@ -65,7 +65,7 @@ window.NexusHumanRenderer = class {
   return {pose:level>.08?current[2]:0,level};
  }
  draw(seconds,now=performance.now()){
-  if(document.hidden||!this.canvas.clientWidth||!this.canvas.clientHeight)return;
+  if((document.hidden&&!this.options.background)||!this.canvas.clientWidth||!this.canvas.clientHeight)return;
   const motion=this.playing&&(!this.options.motion||this.options.motion())&&this.phase!=='emergency';
   const ratio=Math.min(devicePixelRatio||1,1.25),cw=Math.round(this.canvas.clientWidth*ratio),ch=Math.round(this.canvas.clientHeight*ratio);
   if(this.canvas.width!==cw||this.canvas.height!==ch){this.canvas.width=cw;this.canvas.height=ch;this.textureKey='';}

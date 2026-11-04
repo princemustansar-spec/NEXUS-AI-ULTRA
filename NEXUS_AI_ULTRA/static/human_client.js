@@ -18,7 +18,7 @@
   for(const event of ['end','error'])utterance.addEventListener(event,()=>window.NexusHumanSpeech.end(id));
  };
  window.NexusHumanClient=class {
-  constructor(canvas,options={}){this.canvas=canvas;this.options=options;this.config=null;this.renderer=null;this.generation=0;this.stream=null;this.browser=null;this.native={};this.disposed=false;clients.add(this);this.visibility=()=>{if(document.hidden)this.disconnect();else if(this.renderer)this.connect();};document.addEventListener('visibilitychange',this.visibility);}
+  constructor(canvas,options={}){this.canvas=canvas;this.options=options;this.config=null;this.renderer=null;this.generation=0;this.stream=null;this.browser=null;this.native={};this.disposed=false;clients.add(this);this.visibility=()=>{if(document.hidden&&!this.options.background)this.disconnect();else if(this.renderer)this.connect();};document.addEventListener('visibilitychange',this.visibility);}
   async configure(config){
    const key=JSON.stringify(config||{});if(key===this.key)return;this.key=key;this.config=config;const generation=++this.generation;
    if(!config?.enabled){this.release();return;}
@@ -28,12 +28,12 @@
    try{
     const [base,sheet]=await Promise.all([load(config.photo),config.expressions?load(config.expressions):null]);
     if(generation!==this.generation||this.disposed)return;
-    this.renderer=new NexusHumanRenderer(this.canvas,base,sheet,config.rig,{motion:this.options.motion,alignment:config.alignment});this.revision=config.revision;this.canvas.hidden=false;this.options.onActive?.(true);this.connect();
+    this.renderer=new NexusHumanRenderer(this.canvas,base,sheet,config.rig,{motion:this.options.motion,alignment:config.alignment,background:this.options.background});this.revision=config.revision;this.canvas.hidden=false;this.options.onActive?.(true);this.connect();
     this.canvas.title=sheet?'Human avatar · playback synchronization follows the selected voice.':'Photo only · add a matching expression pack for eyelids and speaking mouth shapes.';
-   }catch(e){if(generation===this.generation){this.release();this.options.onError?.('Portrait unavailable; AI Core remains available.');}}
+   }catch(e){if(generation===this.generation){this.canvas.dataset.error=e.message||'Portrait image failed to load';this.release();this.options.onError?.('Portrait unavailable; AI Core remains available.');}}
   }
   connect(){
-   if(this.stream||!this.renderer||document.hidden||this.disposed)return;
+   if(this.stream||!this.renderer||(document.hidden&&!this.options.background)||this.disposed)return;
    this.stream=new EventSource('/api/human-avatar/events');
    this.stream.onmessage=event=>{try{const value=JSON.parse(event.data);this.native=value;if(!value.enabled){this.release();this.key='';this.options.onDisabled?.();return;}this.apply();}catch{this.renderer?.setState({phase:'idle',animation:{playing:false}});}};
    this.stream.onerror=()=>{this.browser=null;this.renderer?.setState({phase:'idle',animation:{playing:false}});};
