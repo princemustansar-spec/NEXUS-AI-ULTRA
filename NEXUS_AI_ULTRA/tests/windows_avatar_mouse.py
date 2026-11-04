@@ -25,6 +25,11 @@ def main():
     with tempfile.TemporaryDirectory(prefix='nexus-avatar-mouse-') as directory:
         os.environ['NEXUS_DATA_DIR']=directory
         backend=LocalBackend(directory);backend.start()
+        human_mode='--human' in sys.argv
+        if human_mode:
+            from nexus.app import human_avatar
+            from test_human_avatar import pack
+            human_avatar.import_file(pack())  # Synthetic PNGs; never a personal portrait.
         main_window=webview.create_window('NEXUS mouse regression',html='<html><body style="margin:0;background:rgb(230,40,180)"></body></html>',x=100,y=100,width=700,height=550,frameless=True)
         avatar.attach(webview,main_window,backend.url+'/static/avatar.html')
         def rect(window):
@@ -38,6 +43,13 @@ def main():
                     if window.evaluate_js("document.querySelector('#phase').textContent")=='READY':break
                     time.sleep(.1)
                 else:raise AssertionError('Avatar telemetry did not become ready')
+                if human_mode:
+                    deadline=time.monotonic()+15
+                    while time.monotonic()<deadline:
+                        if window.evaluate_js("Number(document.querySelector('#human-floating')?.dataset.frames)>1"):break
+                        time.sleep(.1)
+                    else:raise AssertionError('Human avatar did not render in native WebView2')
+                    result['human_renderer']=window.evaluate_js("document.querySelector('#human-floating').dataset.renderer")
                 window.move(220,180)
                 window.evaluate_js("window.mouseProbe={pointer:0,mouse:0};document.addEventListener('pointerdown',()=>mouseProbe.pointer++,true);document.addEventListener('mousedown',()=>mouseProbe.mouse++,true);")
                 time.sleep(.3)

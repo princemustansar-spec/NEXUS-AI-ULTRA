@@ -11,6 +11,7 @@ const root=path.resolve(__dirname,'..');
   const p=new URL(route.request().url()).pathname;
   if(p==='/api/state')return route.fulfill({json:state});
   if(p==='/api/accounts/status')return route.fulfill({json:{chatgpt:{},claude:{},enabled:{}}});
+  if(p==='/api/human-avatar')return route.fulfill({json:{present:false,enabled:false,frames:false}});
   if(p==='/api/personal')return route.fulfill({json:personal});
   if(p==='/api/personal/ollama'&&route.request().method()==='GET')return route.fulfill({json:{available:true,models:[{name:'llama3.2:latest'}]}});
   if(p.startsWith('/api/')){

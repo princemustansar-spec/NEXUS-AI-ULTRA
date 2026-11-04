@@ -20,6 +20,7 @@ from .youtube import media_intent, player as youtube_player
 from .avatar import avatar
 from .handsfree import HandsFree
 from .whatsapp import whatsapp
+from .human_avatar import HumanAvatar, live_snapshot, register as register_human
 
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.getenv('NEXUS_DATA_DIR', str(Path.home() / '.nexus_ai_ultra')))
@@ -28,6 +29,8 @@ providers = Providers(store)
 tools = Tools(store)
 voice = VoiceService(DATA)
 tts = VoiceService(DATA)
+human_avatar = HumanAvatar(DATA,store)
+tts.avatar_enabled = lambda: human_avatar.status()['enabled']
 session_token = secrets.token_urlsafe(32)
 pending = {}
 active = set()
@@ -74,7 +77,8 @@ async def local_security(request: Request, call_next):
         return JSONResponse({'detail':'Cross-origin access denied'}, status_code=403)
     if request.method not in ('GET','HEAD') and request.headers.get('x-nexus-token') != session_token:
         return JSONResponse({'detail':'Invalid session token'}, status_code=403)
-    if request.headers.get('content-length','').isdigit() and int(request.headers['content-length']) > 2_000_000:
+    limit=4_000_000 if request.url.path=='/api/human-avatar/import' else 2_000_000
+    if request.headers.get('content-length','').isdigit() and int(request.headers['content-length']) > limit:
         return JSONResponse({'detail':'Request too large'}, status_code=413)
     response = await call_next(request)
     response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -106,7 +110,7 @@ def state():
                 monitor=tools.monitor(), tools=[dict(name=n,description=d,sensitive=s,args=a) for n,(d,s,a) in CATALOG.items()],
                 emergency=emergency, denied_tools=store.get('denied_tools', []), pending=[dict(id=k,**v) for k,v in pending.items() if v['expires'] > time.time()],
                 roots=tools.roots(),
-                personal_settings=tools.personal.profile(),
+                personal_settings=tools.personal.profile(), human_avatar=human_avatar.status(),
                 chat=list(reversed(store.list('chat', 100))), memory=store.list('memory'), reminders=store.list('reminder'),
                 activity=store.list('activity',50), notifications=store.list('notification',50), preferred_provider=store.get('preferred_provider',''),
                 voice=voice.status(), tts=tts.status(), handsfree=handsfree.status(), handsfree_interrupt_mode=store.get('handsfree_interrupt_mode','any'), voice_muted=store.get('voice_muted',False),
@@ -147,7 +151,7 @@ def avatar_status():
     v, t = voice.status(), tts.status()
     return dict(token=session_token, available=avatar.available(), drag_mode='native' if avatar.can_native_drag() else 'bridge', voice_muted=store.get('voice_muted',False),
                 voice={k:v[k] for k in ('phase','level_dbfs') if k in v},
-                tts={'phase':t.get('phase','idle')}, handsfree=handsfree.status(), thinking=chat_lock.locked(), emergency=emergency,emotion=tools.personal.mood())
+                tts={'phase':t.get('phase','idle')}, handsfree=handsfree.status(), thinking=chat_lock.locked(), emergency=emergency,emotion=tools.personal.mood(),human_avatar=human_avatar.status())
 
 @app.post('/api/avatar/{action}')
 async def avatar_action(action: str):
@@ -536,3 +540,4 @@ handsfree=HandsFree(store,voice,tts,_auto_chat,_auto_approve,_voice_pending,
                    lambda: emergency or avatar.window is None)
 from .personal_api import register as register_personal
 register_personal(app,store,providers,tools,voice,tts,handsfree,lambda:emergency,BASE)
+register_human(app,human_avatar,lambda:live_snapshot(human_avatar,voice,tts,handsfree,tools.personal,store.get('voice_muted',False),emergency,chat_lock.locked()))

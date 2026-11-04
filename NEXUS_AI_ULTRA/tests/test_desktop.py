@@ -118,10 +118,11 @@ def test_gui_design_and_voice_output_preserved():
     for name,digest in expected.items():
         content=(root/'static'/name).read_bytes()
         if name=='index.html':
-            for script in ('accounts.js','whatsapp_ui.js','personal_ui.js'):content=content.replace(('<script src="/static/'+script+'"></script>').encode(),b'')
+            for script in ('accounts.js','whatsapp_ui.js','personal_ui.js','human_avatar.js','human_client.js','human_ui.js'):content=content.replace(('<script src="/static/'+script+'"></script>').encode(),b'')
+            content=content.replace(b'<link rel="stylesheet" href="/static/human_avatar.css">',b'')
         assert hashlib.sha256(content).hexdigest()==digest
     speak=next(line for line in (root/'static/app.js').read_text(encoding='utf-8').splitlines() if line.startswith('function browserSpeak(text)'))
-    assert hashlib.sha256(speak.replace('function browserSpeak','function speak').encode()).hexdigest()=='cafd9fc715762259b89d0b546c144af54b55f557edd4fe3175b7112d8363061d'
+    assert hashlib.sha256(speak.replace('window.attachNexusHumanVoice?.(u,text);','').replace('function browserSpeak','function speak').encode()).hexdigest()=='cafd9fc715762259b89d0b546c144af54b55f557edd4fe3175b7112d8363061d'
 
 
 def test_real_backend_inside_desktop_host(tmp_path,monkeypatch):
