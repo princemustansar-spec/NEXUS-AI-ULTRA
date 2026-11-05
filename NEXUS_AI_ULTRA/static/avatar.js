@@ -7,6 +7,12 @@
  shell.addEventListener('pointerleave',()=>{clearTimeout(controlsTimer);controlsTimer=setTimeout(()=>shell.classList.remove('controls-open'),600);});
  const media=matchMedia('(prefers-reduced-motion: reduce)');
  const motion=()=>{const p=localStorage.getItem('core-motion')||'system';return p==='on'||(p!=='off'&&!media.matches);};
+ const humanCanvas=document.createElement('canvas');humanCanvas.id='human-floating';humanCanvas.setAttribute('aria-label','Human NEXUS avatar');humanCanvas.hidden=true;
+ let humanActive=false;
+ const human=new NexusHumanClient(humanCanvas,{motion,onError:()=>{canvas.dataset.humanError=humanCanvas.dataset.error||'Portrait unavailable';},onActive:on=>{humanActive=on;if(on){document.querySelector('.scene').append(humanCanvas);canvas.style.opacity='0';humanCanvas.style.pointerEvents=gl?'none':'auto';$('fallback').hidden=true;}else{humanCanvas.remove();canvas.style.opacity='';if(!gl)$('fallback').hidden=false;}}});
+ humanCanvas.addEventListener('pointerdown',e=>{if(e.button===0&&dragMode==='native'&&token){e.preventDefault();action('drag');}});
+ canvas.addEventListener('pointermove',e=>{if(human.renderer)human.renderer.look=Math.max(-1,Math.min(1,e.offsetX/canvas.clientWidth*2-1));});
+ addEventListener('beforeunload',()=>human.dispose());
  function motionLabel(){$('motion').textContent='Motion: '+(motion()?'On':'Off');$('motion').setAttribute('aria-pressed',String(motion()));}
  $('motion').onclick=()=>{const values=['system','on','off'],p=localStorage.getItem('core-motion')||'system';localStorage.setItem('core-motion',values[(values.indexOf(p)+1)%3]);motionLabel();};
  media.addEventListener('change',motionLabel);addEventListener('storage',motionLabel);motionLabel();
@@ -17,6 +23,7 @@
  $('interrupt').onclick=async()=>{try{const r=await fetch('/api/handsfree/interrupt',{method:'POST',headers:{'X-Nexus-Token':token,'Content-Type':'application/json'},body:'{}'});const data=await r.json();if(!r.ok)throw Error(data.detail);poll();}catch(e){$('phase').title=e.message;}};
  $('close').onclick=()=>action('close');$('dashboard').onclick=()=>action('dashboard');
  function status(data){
+  human.configure(data.human_avatar);
   mood=['happy','caring','curious','friendly'].includes(data.emotion)?data.emotion:'neutral';canvas.dataset.emotion=mood;
   token=data.token;dragMode=data.drag_mode||'bridge';const voice=data.voice||{},tts=data.tts||{},hf=data.handsfree||{};autoVoice=!!hf.active;$('interrupt').disabled=!hf.active||hf.phase!=='speaking';$('mic').dataset.active=String(autoVoice);$('mic').setAttribute('aria-label',autoVoice?'Pause auto voice':data.voice_muted?'Unmute and start auto voice':'Start auto voice');$('mic').title=autoVoice?(hf.interrupt_mode==='any'?'Auto voice ON — speak to interrupt; headphones reduce echo':hf.interrupt_mode==='wake'?'Auto voice ON — say Nexus ruko to interrupt':'Auto voice ON — use Stop & listen to interrupt'):data.voice_muted?'Unmute and start auto voice — Google mode sends clips online':'Start auto voice — Google mode sends clips online';
   phase=data.emergency?'emergency':hf.phase==='error'?'error':hf.active?(hf.phase==='approval'?'approval':hf.phase==='speaking'?'speaking':hf.phase==='thinking'?'thinking':voice.phase==='calibrating'?'calibrating':'listening'):voice.phase==='error'?'error':['calibrating','listening'].includes(voice.phase)?voice.phase:voice.phase==='transcribing'||data.thinking?'thinking':tts.phase==='speaking'?'speaking':'idle';
@@ -26,7 +33,7 @@
   $('level').style.width=(signal*100)+'%';document.documentElement.dataset.phase=phase;
  }
  async function poll(){clearTimeout(pollTimer);if(disposed||polling)return;polling=true;try{const r=await fetch('/api/avatar/status');if(!r.ok)throw Error('NEXUS unavailable');status(await r.json());}catch(e){phase='error';signal=0;$('level').style.width='0%';$('phase').textContent='OFFLINE';$('detail').textContent='Reconnect to NEXUS';}finally{polling=false;if(!disposed)pollTimer=setTimeout(poll,['listening','calibrating','speaking','thinking'].includes(phase)?300:1200);}}
- function fallback(message){$('fallback').hidden=false;canvas.hidden=true;$('fallback').querySelector('p').textContent=message;}
+ function fallback(message){$('fallback').hidden=humanActive;canvas.hidden=true;$('fallback').querySelector('p').textContent=message;}
  let gl;try{gl=canvas.getContext('webgl',{alpha:true,antialias:true,powerPreference:'low-power',preserveDrawingBuffer:false});}catch(e){}
  if(!gl){fallback('3D graphics unavailable · status still active');poll();return;}
  function shader(type,text){const s=gl.createShader(type);gl.shaderSource(s,text);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
@@ -51,7 +58,7 @@
   function draw(mesh,model,color,glow=0){gl.bindBuffer(gl.ARRAY_BUFFER,mesh.buffer);gl.vertexAttribPointer(loc.p,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(loc.n,3,gl.FLOAT,false,24,12);gl.uniformMatrix4fv(loc.model,false,new Float32Array(model));gl.uniform3fv(loc.color,color);gl.uniform1f(loc.glow,glow);gl.drawArrays(gl.TRIANGLES,0,mesh.count);}
   gl.enableVertexAttribArray(loc.p);gl.enableVertexAttribArray(loc.n);gl.enable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);
   let frames=0,lastStatic='';
-  function render(now){if(disposed||gl.isContextLost())return;frame=requestAnimationFrame(render);const active=['listening','thinking','speaking'].includes(phase),interval=1000/(active?24:15);if(now-last<interval)return;last=now;
+  function render(now){if(disposed||gl.isContextLost())return;frame=requestAnimationFrame(render);if(humanActive)return;const active=['listening','thinking','speaking'].includes(phase),interval=1000/(active?24:15);if(now-last<interval)return;last=now;
    const ratio=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,Math.round(canvas.clientWidth*ratio)),h=Math.max(1,Math.round(canvas.clientHeight*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}const moving=motion()&&!document.hidden&&phase!=='emergency',staticKey=[phase,mood,signal.toFixed(3),w,h].join(':');if(!moving&&lastStatic===staticKey)return;lastStatic=moving?'':staticKey;gl.viewport(0,0,w,h);gl.uniform1f(loc.aspect,w/h);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
    const t=moving?now*.0018:0,float=moving?Math.sin(t*1.5)*.055:0,pulse=phase==='listening'?signal*.07:phase==='speaking'&&moving?(.5+.5*Math.sin(t*9))*.045:0;
    const root=mul(translate(0,float,0),mul(rotateY(moving?Math.sin(t*.65)*.25:0),scale(1+pulse,1+pulse,1+pulse)));

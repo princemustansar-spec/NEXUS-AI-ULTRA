@@ -229,7 +229,8 @@ def voice_worker(connection, stop_event, operation, options, directory, keep_ope
             result = install_model(directory, send)
         elif operation == 'tts':
             from .tts import speak_reply
-            result = speak_reply(options['text'], options.get('allow_online', False), stop_event, send, options.get('preferred_voice',''))
+            extra={'avatar_sync':True} if options.get('avatar_sync') else {}
+            result = speak_reply(options['text'], options.get('allow_online', False), stop_event, send, options.get('preferred_voice',''), **extra)
         else:
             import sounddevice as sd
             if operation == 'diagnostics':
@@ -304,6 +305,7 @@ class VoiceService:
         self.commands = None
         self.started = 0
         self.state = {'phase': 'idle', 'job_id': None}
+        self.avatar_enabled = lambda: False
 
     def _read_messages(self):
         if self.connection:
@@ -370,6 +372,19 @@ class VoiceService:
                     'model_ready': model_manifest(self.directory) is not None,
                     'model_directory': str(self.directory), 'offline_recognition': True, 'max_seconds': MAX_SECONDS}
 
+    def animation_status(self):
+        """Fast telemetry without model/dependency probes or chat/audio contents."""
+        with self.lock:
+            self._collect()
+            phase=self.state.get('phase','idle');animation=dict(self.state.get('animation') or {})
+            if phase in ('idle','done','error','cancelled'):
+                animation.update(playing=False,openness=0,pose=0,cues=[])
+            if animation:
+                animation['age_ms']=max(0,int((time.monotonic()-animation.get('emitted_at',time.monotonic()))*1000))
+                animation.pop('emitted_at',None)
+            return dict(job_id=self.state.get('job_id'),phase=phase,animation=animation,
+                        level_dbfs=self.state.get('level_dbfs'))
+
     def start(self, operation, *, device=None, language='en', seconds=10, engine='offline', locale='en-IN', silence_timeout=None, start_timeout=5, text='', allow_online=False, preferred_voice='', discard_on_stop=False):
         if operation not in ('capture', 'diagnostics', 'test', 'model', 'tts'):
             raise ValueError('Unsupported voice operation')
@@ -391,6 +406,10 @@ class VoiceService:
             raise ValueError('Choose a voice other than Asad/Uzma.')
         options = {'device':device,'language':language,'seconds':seconds,'engine':engine,'locale':locale,
                    'silence_timeout':silence_timeout,'start_timeout':start_timeout,'text':text,'allow_online':allow_online,'preferred_voice':preferred_voice,'discard_on_stop':discard_on_stop is True}
+        if operation=='tts':
+            try:
+                if self.avatar_enabled():options['avatar_sync']=True
+            except Exception:pass  # Optional portrait metadata must not prevent speech.
         with self.lock:
             self._collect()
             if self.process and self.commands and operation == 'capture' and self.state.get('operation') == 'capture' and self.state['phase'] in ('done','error'):
