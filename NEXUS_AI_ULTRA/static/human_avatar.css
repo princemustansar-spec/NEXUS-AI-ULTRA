@@ -1,8 +1,5 @@
-.core-scene #human-core{position:absolute;inset:0;width:100%;height:100%;z-index:3;display:block;touch-action:none}
-.core-scene.human-avatar-mode .map-grid,.core-scene.human-avatar-mode .orbit,.core-scene.human-avatar-mode .ai-core,.core-scene.human-avatar-mode .core-base{visibility:hidden}
-.core-scene.human-avatar-mode #core-motion{z-index:4}
 #human-avatar-file{display:block;margin:10px 0}
 #human-avatar-photo{display:block;max-width:150px;max-height:160px;object-fit:contain;margin:10px 0}
-#human-avatar-photo[hidden],#human-core[hidden]{display:none}
+#human-avatar-photo[hidden]{display:none}
 #human-avatar-mode{margin:8px}
 #human-floating{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}

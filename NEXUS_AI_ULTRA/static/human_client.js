@@ -54,13 +54,4 @@
   release(){this.disconnect();this.renderer?.dispose();this.renderer=null;this.revision='';this.canvas.hidden=true;this.options.onActive?.(false);}
   dispose(){this.disposed=true;this.generation++;this.release();clients.delete(this);document.removeEventListener('visibilitychange',this.visibility);}
  };
- const scene=document.querySelector('.core-scene');
- if(scene){
-  const canvas=document.createElement('canvas');canvas.id='human-core';canvas.hidden=true;canvas.setAttribute('aria-label','Human NEXUS avatar');scene.append(canvas);
-  const motion=()=>{const p=localStorage.getItem('core-motion')||'system';return p==='on'||p!=='off'&&!matchMedia('(prefers-reduced-motion: reduce)').matches;};
-  const client=new NexusHumanClient(canvas,{motion,onActive:on=>scene.classList.toggle('human-avatar-mode',on)});
-  window.syncNexusHuman=config=>client.configure(config);
-  canvas.addEventListener('pointermove',e=>{if(client.renderer)client.renderer.look=Math.max(-1,Math.min(1,e.offsetX/canvas.clientWidth*2-1));});canvas.addEventListener('pointerleave',()=>{if(client.renderer)client.renderer.look=0;});
-  addEventListener('beforeunload',()=>client.dispose());
- }
 })();

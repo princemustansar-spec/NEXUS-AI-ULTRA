@@ -1,9 +1,11 @@
 # Optional live Human Avatar
 
-Settings → Avatar appearance offers Original AI Core (the default) and Human
-Avatar. The same portrait renderer is used in the existing dashboard Core area
-and the existing native floating window. Other GUI sections, providers, tools,
-voice selection, recognition and SQLite records remain in place.
+Settings → Floating avatar appearance offers Original floating AI Core (the
+default) and Floating photo avatar. Only the existing native floating figure
+changes. The dashboard keeps its original AI Core and does not load a portrait
+renderer or avatar event stream. Its existing speech output can still drive the
+floating figure. Other GUI sections, providers, tools, voice selection, recognition
+and SQLite records remain in place.
 
 ## Local portrait setup
 
@@ -81,3 +83,13 @@ native visemes, it reports a skip rather than claiming a successful lip-sync tes
 Physical speaker/microphone behavior, perceived lip sync, portrait alignment and
 CPU/RAM on the user's Core i3/12 GB laptop require laptop acceptance. No hardware
 performance figure or photorealism is claimed from synthetic tests.
+
+## Return to the previous version
+
+For an immediate appearance change, select Original floating AI Core and Apply
+avatar. For a full source/dependency rollback, close NEXUS and use the exact
+Rollback command printed by `install_update.ps1`, with its recognized backup
+folder. Keep that backup and updater script. Existing user data outside the
+installation, including the database and photos, is retained; older code ignores
+the new avatar setting. Automatic recovery after a failed install and manual
+rollback are covered by the existing Windows updater tests.

@@ -9,12 +9,14 @@ Updated: 5 November 2026 (Asia/Riyadh).
 - Feature branch: `feature/live-human-avatar`.
 - Earlier procedural-avatar PR #20 and experimental portrait renderers were not
   merged or used as application baselines. JARVIS and ZAYRON were not modified.
-- No desktop installation or merge has been performed for this change.
+- Release scope: the photo replaces only the floating figure. Desktop installation
+  remains a separate user-run update using the existing backup/rollback installer.
 
 ## Current implementation
 
-Optional local Human Avatar shares the existing GUI and floating window. The
-original AI Core remains default and selectable. Portraits and expression packs
+Optional local Human Avatar replaces only the existing floating figure. The
+dashboard keeps its original AI Core; settings and speech observers remain in the
+GUI, with no dashboard photo renderer. The original floating Core is selectable. Portraits and expression packs
 stay in local application data. The existing settings table gains one optional
 `human_avatar` key; there is no schema migration, provider change or new AI brain.
 
@@ -28,7 +30,7 @@ runtime dependency is added. Full details: docs/LIVE_HUMAN_AVATAR.md.
 
 - Linux Python suite: **282 passed, 4 Windows-only checks skipped**.
 - Browser checks: Human Avatar import, idle/listening/thinking, actual timed-cue
-  rendering/expiry, browser speech boundaries, mute, Motion Off, Core switch and
+  rendering/expiry, cross-window browser speech boundaries, mute, Motion Off, Core switch and
   restore, native drag dispatch, and no-WebGL fallback passed.
 - Existing GUI: 17 navigation sections, memory persistence, system tool, action
   approval, Emergency Stop/resume and four viewport sizes passed without JS

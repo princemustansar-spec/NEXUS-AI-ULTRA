@@ -1,19 +1,19 @@
 'use strict';
 async function renderHumanAvatarSettings(parent){
- const box=card(parent,'Avatar appearance'),status=node('p'),choose=node('input'),mode=node('select');
- mode.id='human-avatar-mode';mode.append(new Option('Original AI Core','core'),new Option('Human Avatar','human'));
+ const box=card(parent,'Floating avatar appearance'),status=node('p'),choose=node('input'),mode=node('select');
+ mode.id='human-avatar-mode';mode.append(new Option('Original floating AI Core','core'),new Option('Floating photo avatar','human'));
  choose.type='file';choose.accept='image/png,.nexus-avatar,.zip';choose.id='human-avatar-file';
  mode.disabled=true;choose.disabled=true;
  const modeLabel=node('label','Avatar ');modeLabel.append(mode);
  const photoLabel=node('label','Choose local PNG photo or avatar pack ');photoLabel.append(choose);
  const preview=node('img');preview.id='human-avatar-photo';preview.alt='Selected local avatar';preview.hidden=true;
- box.append(node('p','Your portrait stays on this laptop. A matching local expression pack adds natural eyelids and speaking mouth shapes.'),modeLabel,photoLabel,preview,status);
+ box.append(node('p','Choose the desktop floating figure. Your portrait stays on this laptop; a matching expression pack adds natural eyelids and speaking mouth shapes.'),modeLabel,photoLabel,preview,status);
  const detail=node('details'),summary=node('summary','Adjust expression alignment');detail.append(summary);const fields={};
  for(const [key,label,min,max] of [['x','Face horizontal offset',-.15,.15],['y','Face vertical offset',-.15,.15],['scale','Face scale',.7,1.3]]){const input=field(detail,label,'number');input.min=min;input.max=max;input.step='.01';input.id='human-align-'+key;fields[key]=input;}
  box.append(detail);
  function describe(p){mode.disabled=false;choose.disabled=false;mode.value=p.enabled?'human':'core';preview.hidden=!p.present;if(p.present)preview.src=p.photo;else preview.removeAttribute('src');detail.hidden=!p.frames;
   for(const [key,input] of Object.entries(fields))input.value=p.alignment?.[key]??(key==='scale'?1:0);
-  status.textContent=!p.present?'AI Core is active. Choose a portrait to enable Human Avatar.':p.frames?(p.enabled?'Human Avatar is active.':'AI Core is active; your Human Avatar is saved.')+' Voice synchronization starts with the next spoken reply.':'Photo loaded. Add a matching expression pack for blinking and speaking lips.';
+  status.textContent=!p.present?'Original floating AI Core is selected. Choose a portrait to enable the photo avatar.':p.frames?(p.enabled?'Floating photo avatar is selected.':'Original floating AI Core is selected; your photo avatar is saved.')+' Voice synchronization starts with the next spoken reply.':'Photo loaded. Add a matching expression pack for blinking and speaking lips.';
  }
  try{describe(await api('human-avatar',undefined,'GET'));}catch(e){status.textContent=e.message;return;}
  choose.onchange=async()=>{
