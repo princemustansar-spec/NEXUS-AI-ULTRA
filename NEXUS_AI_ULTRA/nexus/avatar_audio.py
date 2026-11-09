@@ -4,16 +4,63 @@ import math
 import re
 import time
 
+# Mouth shape ids. static/human_client.js mirrors these tables; tests/fixtures/viseme_words.json
+# keeps both sides identical. 0 = lips resting. The three original packs only draw 1-3;
+# the renderer maps the other shapes to the nearest frame the pack really has.
+#   1 parted (t d n s l th)   2 round (o u w)       3 wide open (a)    4 wide smile (e i)
+#   5 lips pressed (m b p)    6 teeth on lip (f v)  7 pursed (sh ch r) 8 mid open (uh h k g)
+SHAPE_OPENNESS = {0: 0, 1: .35, 2: .6, 3: .9, 4: .5, 5: 0, 6: .3, 7: .45, 8: .65}
+LONG_SHAPES = (2, 3, 4, 8)  # vowel-like shapes stay on screen longer inside a word
+LETTER_SHAPE = dict(a=3, e=4, i=4, o=2, u=2, y=4, w=2, m=5, b=5, p=5, f=6, v=6, r=7, j=7,
+                    h=8, k=8, g=8, q=8, c=1, s=1, z=1, t=1, d=1, n=1, l=1, x=1)
+PAIR_SHAPE = dict(sh=7, ch=7, th=1, ph=6, oo=2, ou=2, ow=2, ee=4, ea=4, ie=4, ai=3, ay=3)
+# SAPI viseme number -> shape (0 silence, 21 = p b m)
+VISEME_SHAPE = {0: 0, 1: 8, 2: 3, 3: 2, 4: 4, 5: 7, 6: 4, 7: 2, 8: 2, 9: 3, 10: 2, 11: 3, 12: 8,
+                13: 7, 14: 1, 15: 1, 16: 7, 17: 1, 18: 6, 19: 1, 20: 8, 21: 5}
+
 def word_pose(word):
     word = re.sub('[^a-z]', '', str(word).lower())
     return 2 if re.search('[ou]', word) else 3 if re.search('[a]', word) else 1
 
+def word_shapes(word, limit=12):
+    """Rough letter-to-mouth sequence for one spoken word (English / Roman Urdu spelling)."""
+    text = re.sub('[^a-z]', '', str(word).lower()); shapes = []; i = 0
+    while i < len(text) and len(shapes) < limit:
+        shape = PAIR_SHAPE.get(text[i:i+2]); step = 2
+        if shape is None: shape = LETTER_SHAPE.get(text[i], 1); step = 1
+        if not shapes or shapes[-1] != shape: shapes.append(shape)
+        i += step
+    return tuple(shapes) or (1,)
+
+def word_cues(position, duration, shapes):
+    """Spread a word's shapes over its duration; vowels get a longer share."""
+    weights = [1.5 if s in LONG_SHAPES else 1.0 for s in shapes]; total = sum(weights); at = float(position); cues = []
+    for shape, weight in zip(shapes, weights):
+        cues.append([int(round(at)), SHAPE_OPENNESS[shape], shape]); at += duration * weight / total
+    cues.append([int(round(position + duration)), 0, 0])
+    return cues
+
+def shape_at(entry, at):
+    """entry = (start_ms, duration_ms, shape | [shapes]); returns the shape playing at `at`, else None."""
+    start, duration, value = entry
+    if not start <= at < start + duration: return None
+    if isinstance(value, int): return value
+    shapes = tuple(value)
+    if len(shapes) < 2: return shapes[0] if shapes else 1
+    weights = [1.5 if s in LONG_SHAPES else 1.0 for s in shapes]; point = (at - start) / max(1, duration) * sum(weights); total = 0
+    for shape, weight in zip(shapes, weights):
+        total += weight
+        if point < total: return shape
+    return shapes[-1]
+
+def word_shape(words, at, default=1):
+    for entry in words:
+        shape = shape_at(entry, at)
+        if shape is not None: return shape
+    return default
+
 def viseme_pose(value):
-    value = int(value)
-    if value in (0, 21): return 0
-    if value in (3, 7, 8, 10): return 2
-    if value in (1, 2, 9, 11, 12, 20): return 3
-    return 1
+    return VISEME_SHAPE.get(int(value), 1)
 
 def envelope(raw, rate, sample_format, channels, step_ms=20):
     """Downsample only amplitude analysis, not playback. Bounded to one TTS chunk."""
@@ -48,15 +95,16 @@ class PlaybackCues:
 
     def word(self, text, length):
         if not self.active or self.mode == 'viseme': return
-        position = max(0,int((time.monotonic()-self.started)*1000)); duration = max(70,min(350,int(length)*45))
-        pose = word_pose(text)
-        self.emit(pose=pose,openness=.65,cues=[[position,.65,pose],[position+duration,0,0]])
+        position = max(0,int((time.monotonic()-self.started)*1000)); duration = max(70,min(420,int(length)*45))
+        cues = word_cues(position, duration, word_shapes(text))
+        self.emit(pose=cues[0][2],openness=cues[0][1],cues=cues)
 
     def viseme(self, value, duration):
         if not self.active: return
         self.mode = 'viseme'; position = max(0,int((time.monotonic()-self.started)*1000)); pose = viseme_pose(value)
-        self.emit(pose=pose,openness=0 if not pose else .8,
-                  cues=[[position,0 if not pose else .8,pose],[position+max(30,min(500,int(duration))),0,0]])
+        openness = SHAPE_OPENNESS[pose]
+        self.emit(pose=pose,openness=openness,
+                  cues=[[position,openness,pose],[position+max(30,min(500,int(duration))),0,0]])
 
 def sapi_observer(engine, bridge, text):
     """Keep pyttsx3's own event sink intact; attach a second optional SAPI sink."""
