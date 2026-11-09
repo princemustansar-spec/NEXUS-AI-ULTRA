@@ -51,3 +51,14 @@ blink/mouth animation. Three mouth poses do not provide exact phoneme lip sync.
 Still requires the user's Windows laptop: perceived audio/lip alignment with
 their selected voice, actual portrait appearance, physical speaker/microphone and
 interruption behavior, and measured CPU/RAM on the Core i3/12 GB system.
+
+## In-progress GitHub integration (9 November 2026)
+
+- Isolated branch: `feature/github-readonly-device-login` (main untouched).
+- Added optional OAuth Device Flow using public client ID and no client secret.
+- Added GitHub Settings UI for Connect, Check, Disconnect, and public repository search.
+- Public search sends no OAuth token; no private-repository scopes or write endpoints.
+- Login is **session-only** until secure persistence is separately implemented and tested.
+- Added focused mocked tests in `tests/test_github_connect.py`; **not executed yet**.
+- Pending: CI/runtime tests, real Windows login acceptance, security review, and user-approved merge.
+- Changed: `nexus/github_connect.py`, `nexus/app.py`, `static/app.js`, `tests/test_github_connect.py`, `PROJECT_STATE.md`.
