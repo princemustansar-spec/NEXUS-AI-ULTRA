@@ -12,7 +12,7 @@ AUTH = "https://github.com"
 _session = {"device_code": None, "expires": 0, "interval": 5, "last_poll": 0, "token": None, "user": None}
 
 def _request(url, data=None, token=None):
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "NEXUS-AI-ULTRA"}
+    headers = {"Accept": "application/json" if url.startswith(AUTH + "/login/") else "application/vnd.github+json", "User-Agent": "NEXUS-AI-ULTRA"}
     if token:
         headers["Authorization"] = "Bearer " + token
     if data is not None:
