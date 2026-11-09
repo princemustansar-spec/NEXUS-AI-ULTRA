@@ -181,6 +181,27 @@ async def handsfree_action(action: str, request: Request):
 
 
 
+@app.get('/api/github/status')
+def github_status():
+    from . import github_connect
+    return github_connect.status()
+
+@app.post('/api/github/{action}')
+async def github_action(action: str, request: Request):
+    from . import github_connect
+    if action not in ('start','check','disconnect','search'):
+        raise ValueError('Unknown GitHub action')
+    body = await request.json()
+    if action == 'start':
+        if body.get('consent') is not True:
+            raise ValueError('Confirm opening GitHub authorization.')
+        return await asyncio.to_thread(github_connect.start)
+    if action == 'check':
+        return await asyncio.to_thread(github_connect.check)
+    if action == 'disconnect':
+        return github_connect.disconnect()
+    return await asyncio.to_thread(github_connect.search, body.get('query',''))
+
 @app.get('/api/accounts/status')
 def accounts_status():
     return {**providers.accounts.status(),'verified':store.get('account_verified',{})}
