@@ -1,16 +1,22 @@
 'use strict';
-// Shared, local-only connected portrait renderer. Mouth poses follow playback cues.
+// Shared, local-only connected portrait renderer. Mouth shapes follow playback cues.
+// Shape ids and the fallback table live in human_client.js (window.NexusHumanShapes).
 window.NexusHumanRenderer = class {
  constructor(canvas,base,sheet,rig,options={}){
   this.canvas=canvas;this.base=base;this.sheet=sheet;this.options=options;this.rig=rig;this.phase='idle';this.emotion='neutral';this.packet={};this.received=0;this.alignment=options.alignment||{x:0,y:0,scale:1};
-  this.playing=true;this.start=performance.now();this.last=0;this.look=0;this.frames=0;
-  this.w=base.width;this.h=base.height;this.cells=[0,1,2,3].map(i=>({x:i%2*(sheet?sheet.width:2)/2,y:Math.floor(i/2)*(sheet?sheet.height:2)/2,w:(sheet?sheet.width:2)/2,h:(sheet?sheet.height:2)/2}));
+  this.playing=true;this.start=performance.now();this.last=0;this.lastDraw=0;this.look=0;this.frames=0;
+  this.w=base.width;this.h=base.height;
+  const [cols,rows]=rig.grid||[2,2],sw=sheet?sheet.width:cols,sh=sheet?sheet.height:rows;
+  this.cells=Array.from({length:cols*rows},(_,i)=>({x:i%cols*sw/cols,y:Math.floor(i/cols)*sh/rows,w:sw/cols,h:sh/rows}));
   const textureScale=Math.min(1,768/Math.max(this.w,this.h));
   this.surface=document.createElement('canvas');this.surface.width=Math.max(1,Math.round(this.w*textureScale));this.surface.height=Math.max(1,Math.round(this.h*textureScale));this.paint=this.surface.getContext('2d');
   this.gl=canvas.getContext('webgl',{alpha:true,antialias:true,powerPreference:'low-power',preserveDrawingBuffer:false});
   if(this.gl)this.setupMesh();else this.fallback=canvas.getContext('2d');
   this.closedEyes=sheet?rig.eyes.map(([i,src,dest])=>this.patch(i,src,dest)):[];
-  this.mouths=sheet?[null,...rig.mouths.map(([i,src,dest])=>this.patch(i,src,dest))]:[null];
+  // mouths[0] is "no patch" (lips at rest in the photo); slotOf maps a mouth shape id to its patch.
+  this.mouths=[null];this.slotOf={};
+  if(sheet)rig.mouths.forEach(([i,src,dest],n)=>{this.mouths.push(this.patch(i,src,dest));this.slotOf[(rig.shapes||[])[n]??n+1]=n+1;});
+  this.mix=new Array(this.mouths.length).fill(0);this.jaw=0;this.purse=0;this.speech=0;this.blinkState={next:2+Math.random()*2.5,start:-1};
   this.openEyes=rig.eyes.map(([,src,dest])=>this.patch(-1,dest,dest));this.textureKey='';
   this.tick=this.tick.bind(this);this.frame=requestAnimationFrame(this.tick);
  }
@@ -25,11 +31,18 @@ window.NexusHumanRenderer = class {
   return {image:layer,x:dx*this.w,y:dy*this.h,w:dw*this.w,h:dh*this.h};
  }
  overlay(p,alpha=1){this.paint.save();this.paint.globalAlpha=alpha;const a=this.alignment,cx=this.w*.5,cy=this.h*.44;this.paint.drawImage(p.image,cx+(p.x-cx)*a.scale+a.x*this.w,cy+(p.y-cy)*a.scale+a.y*this.h,p.w*a.scale,p.h*a.scale);this.paint.restore();}
+ // First mouth shape the pack really has for `shape` (0 = leave the lips as photographed).
+ slotFor(shape){for(const candidate of window.NexusHumanShapes.FALLBACK[shape]||[])if(this.slotOf[candidate])return this.slotOf[candidate];return 0;}
+ // Normalised lips centre and half size, moved with the face alignment, for the jaw/lip warp.
+ mouthRegion(){
+  const r=this.rig,a=this.alignment,box=r.jaw||(d=>[d[0]+d[2]/2,d[1]+d[3]/2,d[2]/2,d[3]/2])(r.mouths[0][2]);
+  return [.5+(box[0]-.5)*a.scale+a.x,.44+(box[1]-.44)*a.scale+a.y,box[2]*a.scale,box[3]*a.scale];
+ }
  setupMesh(){
   const gl=this.gl;
   const shader=(type,source)=>{const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;};
   const p=gl.createProgram();
-  gl.attachShader(p,shader(gl.VERTEX_SHADER,`attribute vec2 aPosition;uniform vec2 uSource;uniform vec2 uView;uniform float uFit;uniform float uRoll;uniform float uNod;uniform float uYaw;uniform float uBreath;uniform vec2 uPivot;uniform vec2 uNeck;uniform float uMood;varying vec2 vUV;
+  gl.attachShader(p,shader(gl.VERTEX_SHADER,`attribute vec2 aPosition;uniform vec2 uSource;uniform vec2 uView;uniform float uFit;uniform float uRoll;uniform float uNod;uniform float uYaw;uniform float uBreath;uniform vec2 uPivot;uniform vec2 uNeck;uniform float uMood;uniform float uJaw;uniform float uPurse;uniform vec4 uMouth;varying vec2 vUV;
    void main(){
     vUV=aPosition;vec2 point=aPosition*uSource;vec2 pivot=uPivot*uSource;vec2 delta=point-pivot;
     float head=1.-smoothstep(uNeck.x,uNeck.y,aPosition.y);
@@ -42,19 +55,29 @@ window.NexusHumanRenderer = class {
     if(uMood==1.)point.y-=cheek*uSource.y*.002;
     vec2 browDelta=(aPosition-vec2(.57,.34))/vec2(.07,.04);
     if(uMood==3.)point.y-=exp(-dot(browDelta,browDelta))*uSource.y*.003;
+    // Speech: the chin and lower lip drop with the mouth opening, the lip corners pull in (round) or out (smile).
+    vec2 md=(aPosition-uMouth.xy)/uMouth.zw;
+    float below=smoothstep(-.35,.35,md.y);vec2 jz=vec2(md.x*.6,(md.y-1.2)*.85);
+    point.y+=uJaw*below*sqrt(head)*exp(-dot(jz,jz))*uSource.y*.012;
+    vec2 pz=vec2(md.x*.5,md.y*.9);
+    point.x-=uPurse*(aPosition.x-uMouth.x)*exp(-dot(pz,pz))*uSource.x*.10;
     vec2 screen=(point-uSource*.5)*uFit*2./uView;gl_Position=vec4(screen.x,-screen.y,0.,1.);
    }`));
   gl.attachShader(p,shader(gl.FRAGMENT_SHADER,`precision mediump float;uniform sampler2D uImage;varying vec2 vUV;void main(){gl_FragColor=texture2D(uImage,vUV);}`));
   gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error('Avatar mesh unavailable');gl.useProgram(p);
-  const vertices=[],cols=24,rows=30;
+  const vertices=[],cols=36,rows=44;
   for(let y=0;y<rows;y++)for(let x=0;x<cols;x++)for(const [dx,dy] of [[0,0],[1,0],[1,1],[0,0],[1,1],[0,1]])vertices.push((x+dx)/cols,(y+dy)/rows);
   const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW);
   const attr=gl.getAttribLocation(p,'aPosition');gl.enableVertexAttribArray(attr);gl.vertexAttribPointer(attr,2,gl.FLOAT,false,0,0);this.count=vertices.length/2;this.buffer=buffer;this.program=p;gl.getAttachedShaders(p).forEach(s=>gl.deleteShader(s));
-  this.uniform={};for(const name of ['uSource','uView','uFit','uRoll','uNod','uYaw','uBreath','uPivot','uNeck','uMood'])this.uniform[name]=gl.getUniformLocation(p,name);
+  this.uniform={};for(const name of ['uSource','uView','uFit','uRoll','uNod','uYaw','uBreath','uPivot','uNeck','uMood','uJaw','uPurse','uMouth'])this.uniform[name]=gl.getUniformLocation(p,name);
   this.texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,this.texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
   gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.clearColor(0,0,0,0);
  }
- setState(packet){this.packet=packet;this.phase=packet.phase||'idle';this.emotion=packet.emotion||'neutral';this.received=performance.now();if((packet.blocked||this.phase!=='speaking'||!packet.animation?.playing)&&Number(this.canvas.dataset.pose)>0)this.draw((this.received-this.start)/1000,this.received);}
+ setState(packet){
+  this.packet=packet;this.phase=packet.phase||'idle';this.emotion=packet.emotion||'neutral';this.received=performance.now();
+  if(packet.blocked){this.mix.fill(0);this.jaw=this.purse=this.speech=0;}
+  if((packet.blocked||this.phase!=='speaking'||!packet.animation?.playing)&&Number(this.canvas.dataset.pose)>0)this.draw((this.received-this.start)/1000,this.received);
+ }
  audioAt(now){
   const a=this.packet.animation||{};
   if(!a.playing||this.phase!=='speaking'||now-this.received>600||!Array.isArray(a.cues)||a.cues.length<2)return {pose:0,level:0};
@@ -63,36 +86,52 @@ window.NexusHumanRenderer = class {
   let i=0;while(i+1<cues.length&&cues[i+1][0]<=position)i++;
   const current=cues[i],next=cues[Math.min(i+1,cues.length-1)],mix=(position-current[0])/Math.max(1,next[0]-current[0]);
   const level=Math.max(0,Math.min(1,current[1]+(next[1]-current[1])*mix));
-  return {pose:level>.08?current[2]:0,level};
+  return {pose:level>.08?Math.round(current[2]):0,level};
  }
  draw(seconds,now=performance.now()){
   if(document.hidden||!this.canvas.clientWidth||!this.canvas.clientHeight)return;
   const motion=this.playing&&(!this.options.motion||this.options.motion())&&this.phase!=='emergency';
+  const dt=Math.min(.12,Math.max(.001,this.lastDraw?(now-this.lastDraw)/1000:.04));this.lastDraw=now;
   const ratio=Math.min(devicePixelRatio||1,1.25),cw=Math.round(this.canvas.clientWidth*ratio),ch=Math.round(this.canvas.clientHeight*ratio);
   if(this.canvas.width!==cw||this.canvas.height!==ch){this.canvas.width=cw;this.canvas.height=ch;this.textureKey='';}
   const fit=Math.min((cw-12*ratio)/this.w,(ch-12*ratio)/this.h),t=motion?seconds:0,ctx=this.paint,audio=motion?this.audioAt(now):{pose:0,level:0};
-  const cycle=t%5.1,blink=motion&&cycle>4.68&&cycle<4.92?Math.sin((cycle-4.68)/.24*Math.PI):0;
-  const pose=audio.pose>=1&&audio.pose<=3?audio.pose:0;
+  // Mouth: each patch fades in fast and out slowly, so shapes blend into each other instead of snapping.
+  const ease=(value,target,rise,fall)=>value+(target-value)*(1-Math.exp(-dt/(target>value?rise:fall)));
+  const shapes=window.NexusHumanShapes,pose=audio.pose>=1&&audio.pose<=8?audio.pose:0,slot=pose?this.slotFor(pose):0;
+  for(let i=1;i<this.mix.length;i++){this.mix[i]=ease(this.mix[i],i===slot?Math.min(1,audio.level*2):0,.03,.075);if(this.mix[i]<.01)this.mix[i]=0;}
+  this.jaw=ease(this.jaw,pose?audio.level*(shapes.OPEN[pose]||0):0,.04,.09);
+  this.purse=ease(this.purse,pose===2||pose===7?audio.level:pose===4?-audio.level:0,.06,.06);
+  this.speech=ease(this.speech,audio.level,.12,.3);
+  if(!motion){this.mix.fill(0);this.jaw=this.purse=this.speech=0;}
+  // Blinks come at uneven intervals, now and then twice in a row.
+  let blink=0;const b=this.blinkState;
+  if(motion){
+   if(b.start<0&&seconds>=b.next)b.start=seconds;
+   if(b.start>=0){const p=(seconds-b.start)/.24;if(p>=1){b.start=-1;b.next=seconds+(Math.random()<.18?.3:2.2+Math.random()*3.8);}else blink=Math.sin(p*Math.PI);}
+  }else b.start=-1;
   const gaze=motion&&this.closedEyes.length&&blink<.05?(this.phase==='thinking'?.65:this.phase==='listening'?this.look*.45:Math.sin(Math.floor(t/4)*1.7)*.2):0;
-  const key=[pose,audio.level.toFixed(2),blink.toFixed(2),gaze.toFixed(2),JSON.stringify(this.alignment)].join(':');
+  const key=[this.mix.map(v=>v.toFixed(2)).join(','),blink.toFixed(2),gaze.toFixed(2),JSON.stringify(this.alignment)].join(':');
   if(key!==this.textureKey){
    ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,this.surface.width,this.surface.height);ctx.setTransform(this.surface.width/this.w,0,0,this.surface.height/this.h,0,0);ctx.drawImage(this.base,0,0);
    if(gaze)for(const p of this.openEyes){ctx.save();ctx.translate(gaze*this.w*.004,this.phase==='thinking'?-this.h*.0015:0);this.overlay(p);ctx.restore();}
    if(blink>.01)for(const eye of this.closedEyes)this.overlay(eye,Math.min(1,blink*1.6));
-   if(pose&&this.mouths[pose])this.overlay(this.mouths[pose],Math.min(1,audio.level*2));
+   // Strongest mouth patch is drawn last, on top of any patch that is still fading out.
+   this.mix.map((v,i)=>[v,i]).filter(([v,i])=>i&&v>.02).sort((x,y)=>x[0]-y[0]).forEach(([v,i])=>this.overlay(this.mouths[i],Math.min(1,v)));
    this.textureKey=key;this.textureDirty=true;
   }
-  const roll=motion?(this.phase==='thinking'?.016:0)+Math.sin(t*.83)*.020+this.look*.012:0;
-  const nod=motion?(this.phase==='speaking'?audio.level*.008:Math.sin(t*.9)*.004):0,breath=motion?Math.sin(t*1.6)*.006:0,yaw=motion?Math.sin(t*.6)*.012:0;
+  const sp=this.speech;
+  const roll=motion?(this.phase==='thinking'?.016:0)+Math.sin(t*.83)*.020+this.look*.012+sp*Math.sin(t*1.9)*.010:0;
+  const nod=motion?(this.phase==='speaking'?this.jaw*.010+sp*Math.sin(t*2.6)*.004:Math.sin(t*.9)*.004):0,breath=motion?Math.sin(t*1.6)*.006:0,yaw=motion?Math.sin(t*.6)*.012+sp*Math.sin(t*1.3+1.1)*.008:0;
   const staticKey=[key,this.phase,this.emotion,cw,ch].join(':');if(!motion&&this.staticKey===staticKey)return;this.staticKey=motion?'':staticKey;
   if(this.gl){
    const gl=this.gl,u=this.uniform;if(gl.isContextLost())return;gl.viewport(0,0,cw,ch);gl.clear(gl.COLOR_BUFFER_BIT);gl.bindTexture(gl.TEXTURE_2D,this.texture);
    if(this.textureDirty){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,this.surface);this.textureDirty=false;}
-   gl.uniform2f(u.uSource,this.w,this.h);gl.uniform2f(u.uView,cw,ch);gl.uniform1f(u.uFit,fit);gl.uniform1f(u.uRoll,roll);gl.uniform1f(u.uNod,nod);gl.uniform1f(u.uYaw,yaw);gl.uniform1f(u.uBreath,breath);gl.uniform2f(u.uPivot,...this.rig.pivot);gl.uniform2f(u.uNeck,...this.rig.neck);gl.uniform1f(u.uMood,this.emotion==='happy'?1:this.emotion==='curious'?3:0);gl.drawArrays(gl.TRIANGLES,0,this.count);
+   gl.uniform2f(u.uSource,this.w,this.h);gl.uniform2f(u.uView,cw,ch);gl.uniform1f(u.uFit,fit);gl.uniform1f(u.uRoll,roll);gl.uniform1f(u.uNod,nod);gl.uniform1f(u.uYaw,yaw);gl.uniform1f(u.uBreath,breath);gl.uniform2f(u.uPivot,...this.rig.pivot);gl.uniform2f(u.uNeck,...this.rig.neck);gl.uniform1f(u.uMood,this.emotion==='happy'?1:this.emotion==='curious'?3:0);
+   gl.uniform1f(u.uJaw,this.jaw);gl.uniform1f(u.uPurse,this.purse);gl.uniform4f(u.uMouth,...this.mouthRegion());gl.drawArrays(gl.TRIANGLES,0,this.count);
   }else{
    const x=this.fallback;x.clearRect(0,0,cw,ch);x.save();x.translate(cw/2,ch/2);x.rotate(roll*.4);x.scale(fit,fit*(1+breath*.4));x.drawImage(this.surface,-this.w/2,-this.h/2,this.w,this.h);x.restore();
   }
-  this.canvas.dataset.renderer=this.gl?'continuous-mesh':'unified-2d';this.canvas.dataset.phase=this.phase;this.canvas.dataset.pose=String(pose);this.canvas.dataset.blink=blink.toFixed(3);this.canvas.dataset.frames=String(++this.frames);
+  this.canvas.dataset.renderer=this.gl?'continuous-mesh':'unified-2d';this.canvas.dataset.phase=this.phase;this.canvas.dataset.pose=String(pose);this.canvas.dataset.slot=String(slot);this.canvas.dataset.mix=this.mix.map(v=>v.toFixed(2)).join(',');this.canvas.dataset.jaw=this.jaw.toFixed(3);this.canvas.dataset.blink=blink.toFixed(3);this.canvas.dataset.frames=String(++this.frames);
  }
  tick(now){this.frame=requestAnimationFrame(this.tick);if(now-this.last<1000/(this.phase==='speaking'?24:12))return;this.last=now;this.draw((now-this.start)/1000,now);}
  dispose(){cancelAnimationFrame(this.frame);if(this.gl){this.gl.deleteTexture(this.texture);this.gl.deleteBuffer(this.buffer);this.gl.deleteProgram(this.program);}}

@@ -46,16 +46,31 @@ def validate_png(data):
 def numbers(values,length):
     return isinstance(values,list) and len(values)==length and all(type(n) in (int,float) and math.isfinite(n) for n in values)
 
+OPTIONAL_RIG={'grid','shapes','jaw'}
+
 def validate_rig(value):
-    if not isinstance(value,dict) or set(value)!=set(DEFAULT_RIG):raise ValueError('Invalid portrait rig.')
-    for key,count in [('eyes',2),('mouths',3)]:
-        if not isinstance(value[key],list) or len(value[key])!=count:raise ValueError('Invalid facial frames.')
+    """Original packs: 2x2 sheet, 2 eye patches, 3 mouth patches. Newer packs may add
+    `grid` [columns, rows] (up to 12 cells), 3-8 mouth patches, `shapes` (mouth shape id of
+    each patch, 1-8) and `jaw` [centre x, centre y, half width, half height] of the mouth."""
+    if not isinstance(value,dict) or not set(DEFAULT_RIG)<=set(value)<=set(DEFAULT_RIG)|OPTIONAL_RIG:raise ValueError('Invalid portrait rig.')
+    grid=value.get('grid',[2,2])
+    if not isinstance(grid,list) or len(grid)!=2 or any(type(n) is not int or not 1<=n<=4 for n in grid) or grid[0]*grid[1]>12:raise ValueError('Invalid expression sheet grid.')
+    cells=grid[0]*grid[1]
+    for key,low,high in [('eyes',2,2),('mouths',3,8)]:
+        if not isinstance(value[key],list) or not low<=len(value[key])<=high:raise ValueError('Invalid facial frames.')
         for row in value[key]:
-            if not isinstance(row,list) or len(row)!=3 or type(row[0]) is not int or row[0] not in range(4):raise ValueError('Invalid frame index.')
+            if not isinstance(row,list) or len(row)!=3 or type(row[0]) is not int or row[0] not in range(cells):raise ValueError('Invalid frame index.')
             for box in row[1:]:
                 if not numbers(box,4) or any(n<0 or n>1 for n in box) or min(box[2:])<=0 or box[0]+box[2]>1 or box[1]+box[3]>1:
                     raise ValueError('Facial frame bounds must stay inside the image.')
                 if box[2]*box[3]>.16:raise ValueError('Facial frame regions must remain small.')
+    if 'shapes' in value:
+        shapes=value['shapes']
+        if not isinstance(shapes,list) or len(shapes)!=len(value['mouths']) or any(type(n) is not int or not 1<=n<=8 for n in shapes) or len(set(shapes))!=len(shapes):
+            raise ValueError('Invalid mouth shape list.')
+    if 'jaw' in value:
+        jaw=value['jaw']
+        if not numbers(jaw,4) or any(not 0<=n<=1 for n in jaw) or jaw[2]<=0 or jaw[3]<=0 or jaw[2]>.5 or jaw[3]>.5:raise ValueError('Invalid jaw region.')
     if not numbers(value['pivot'],2) or any(not 0<=v<=1 for v in value['pivot']):raise ValueError('Invalid head pivot.')
     if not numbers(value['neck'],2) or not 0<=value['neck'][0]<value['neck'][1]<=1:raise ValueError('Invalid neck transition.')
     return copy.deepcopy(value)

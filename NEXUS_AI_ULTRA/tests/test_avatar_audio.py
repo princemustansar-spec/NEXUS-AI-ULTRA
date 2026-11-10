@@ -1,11 +1,12 @@
 import asyncio
 from array import array
 import json
+from pathlib import Path
 from types import SimpleNamespace
 import threading
 from unittest.mock import Mock
 import pytest
-from nexus.avatar_audio import PlaybackCues, envelope, sapi_observer, viseme_pose
+from nexus.avatar_audio import PlaybackCues, SHAPE_OPENNESS, VISEME_SHAPE, envelope, sapi_observer, shape_at, viseme_pose, word_cues, word_shape, word_shapes
 from nexus import tts
 
 def test_envelope_measures_real_pcm_and_silence_with_bounded_work():
@@ -23,7 +24,7 @@ def test_cues_come_from_callbacks_and_clear_on_end(monkeypatch):
     count=len(messages);bridge.word('ignored',7);assert len(messages)==count
     bridge.end();assert not messages[-1]['animation']['playing'] and messages[-1]['animation']['pose']==0
     assert 'hello' not in json.dumps(messages)
-    assert viseme_pose(0)==viseme_pose(21)==0
+    assert viseme_pose(0)==0 and viseme_pose(21)==5 and SHAPE_OPENNESS[5]==0
 
 def test_pygame_timing_starts_after_play_and_tracks_actual_position(monkeypatch):
     import sys
@@ -79,3 +80,40 @@ def test_terminal_voice_state_discards_old_cues(tmp_path):
     service=VoiceService(tmp_path);service.state=dict(phase='done',job_id='old',animation=dict(playing=True,pose=3,cues=[[0,1,3],[1000,0,0]]))
     assert not service.animation_status()['animation']['playing']
     service.cancel();assert service.animation_status()['animation']['pose']==0
+
+FIXTURE=json.loads((Path(__file__).parent/'fixtures'/'viseme_words.json').read_text())
+
+def test_word_shapes_match_the_browser_tables_in_the_shared_fixture():
+    for word,expected in FIXTURE['words'].items():assert list(word_shapes(word))==expected,word
+    c=FIXTURE['cues'];assert word_cues(c['position'],c['duration'],word_shapes(c['word']))==c['expected']
+    assert {str(k):v for k,v in VISEME_SHAPE.items()}==FIXTURE['visemes']
+    assert len(word_shapes('a'*5+'bcdefghijklmnop'))<=12 and word_shapes('')==(1,) and word_shapes('123')==(1,)
+
+def test_every_sapi_viseme_maps_to_a_known_shape_and_unknown_numbers_stay_safe():
+    assert set(range(22))==set(VISEME_SHAPE) and set(VISEME_SHAPE.values())<=set(SHAPE_OPENNESS)
+    assert viseme_pose(99)==1 and viseme_pose(18)==6 and viseme_pose(21)==5
+
+def test_a_word_moves_through_several_mouth_shapes_and_closes_at_its_end(monkeypatch):
+    clock=[50.0];monkeypatch.setattr('nexus.avatar_audio.time.monotonic',lambda:clock[0]);messages=[];bridge=PlaybackCues(messages.append)
+    bridge.begin('word-boundary');clock[0]+=.1;bridge.word('hello',5)
+    cues=messages[-1]['animation']['cues']
+    assert [c[2] for c in cues]==[8,4,1,2,0] and cues[0][0]==100 and cues[-1][1]==0
+    assert all(a[0]<b[0] for a,b in zip(cues,cues[1:])) and messages[-1]['animation']['pose']==8
+    bridge.viseme(21,80)  # a real viseme stream takes over; pressed lips are closed
+    clock[0]+=.2;bridge.word('ignored',7);assert messages[-1]['animation']['pose']==5 and messages[-1]['animation']['openness']==0
+
+def test_word_timeline_accepts_old_single_pose_entries_and_shape_lists():
+    assert shape_at((0,100,2),50)==2 and shape_at((0,100,2),100) is None
+    shapes=(8,4,1,2);seen=[shape_at((0,300,shapes),at) for at in range(0,300,10)]
+    assert seen[0]==8 and seen[-1]==2 and set(seen)==set(shapes) and seen==sorted(seen,key=shapes.index)
+    assert word_shape([(0,100,(3,)),(100,100,2)],150)==2 and word_shape([(0,100,3)],500)==1 and shape_at((0,100,()),10)==1
+
+def test_edge_word_boundaries_become_shape_sequences(monkeypatch):
+    import sys
+    class Fake:
+        def __init__(self,*a,**k):pass
+        async def stream(self):
+            yield dict(type='audio',data=b'x');yield dict(type='WordBoundary',offset=1_000_000,duration=2_000_000,text='Hello')
+    monkeypatch.setitem(sys.modules,'edge_tts',SimpleNamespace(Communicate=Fake))
+    data,words=asyncio.run(tts.edge_audio('Hello',with_timing=True))
+    assert data==b'x' and words==[(100,200,(8,4,1,2))]

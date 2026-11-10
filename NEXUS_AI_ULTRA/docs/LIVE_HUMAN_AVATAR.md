@@ -15,9 +15,35 @@ or a private `.nexus-avatar` pack (<4 MB). A pack contains exactly `portrait.png
 blink, gently parted lips, round lips and open/smiling lips. The rig maps those
 frames onto the portrait. Use matching frames of the same person only.
 
-A photo alone gives connected head movement and breathing. Natural eyelids and
-visible speaking mouth shapes require matching expression frames: the app does
-not invent unseen facial details or upload a photo to generate them. The approved
+A photo alone gives connected head movement, breathing and a small jaw movement
+that follows the voice. Natural eyelids and visible speaking mouth shapes require
+matching expression frames: the app does not invent unseen facial details or
+upload a photo to generate them.
+
+### More mouth shapes (optional)
+
+The 2×2 pack above gives three mouth frames. A pack can carry up to eight, on a
+3×3 sheet (`rig.json` gets `"grid":[3,3]` and `"shapes":[1,…,8]`). Cell 0 is the
+blink; the other cells run left to right, top to bottom:
+
+| Cell / shape | Mouth | Typical sounds |
+| --- | --- | --- |
+| 1 | slightly parted | t d n s l th |
+| 2 | round | o u w |
+| 3 | wide open | a |
+| 4 | wide smile | e i |
+| 5 | lips pressed | m b p |
+| 6 | teeth on lower lip | f v |
+| 7 | pursed | sh ch r |
+| 8 | half open | uh h k g |
+
+You do not need all eight. For any shape a pack does not have, the app shows the
+nearest frame it does have (shape 5 just leaves the lips at rest), so old three-frame
+packs keep working unchanged. To build a pack from your own images, run
+`python make_avatar_pack.py portrait.png expressions.png my.nexus-avatar` from the
+NEXUS folder (see the top of that file for options such as `--shapes 1,2,3,4,5` or a
+custom `rig.json`). The frames must show the same person and line up with the portrait;
+use "Adjust expression alignment" in Settings to nudge them. The approved
 portrait/expression pack is distributed privately, outside this public source
 repository. Changing to a new photo clears the previous expression sheet.
 
@@ -60,8 +86,17 @@ motion retain a stable portrait.
 
 This is layered 2D animation with a connected mesh, not photorealistic 3D. The
 neck is never cut into a separate moving rectangle. Speech movement follows
-real playback, but three mouth poses and amplitude/word timing are not precise
-phoneme lip sync. Native viseme quality depends on the selected Windows voice.
+real playback, but amplitude/word timing is not precise phoneme lip sync. Native
+viseme quality depends on the selected Windows voice.
+
+How speech is drawn: every spoken word is split into a rough sequence of mouth
+shapes from its letters (works for English and Roman Urdu spelling; words in other
+scripts only open and close the mouth). Windows voices that report visemes use those
+instead. The shape changes blend into each other over a few frames, the chin and
+lower lip drop with how wide the mouth opens, and the lip corners pull in for round
+sounds and out for smiles. Blinks come at uneven intervals, and the head sways a
+little more while speaking. The `eight shapes` need a pack that has the frames (see
+above); without them you get the blended three-frame version.
 
 ## Resources and acceptance
 

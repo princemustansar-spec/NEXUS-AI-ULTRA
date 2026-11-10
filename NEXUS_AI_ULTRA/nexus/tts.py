@@ -27,8 +27,8 @@ async def edge_audio(text, with_timing=False):
             if packet['type']=='audio':
                 data.extend(packet['data'])
             elif with_timing and packet['type']=='WordBoundary' and len(words)<300:
-                from .avatar_audio import word_pose
-                words.append((int(packet['offset']/10000),int(packet['duration']/10000),word_pose(packet.get('text',''))))
+                from .avatar_audio import word_shapes
+                words.append((int(packet['offset']/10000),int(packet['duration']/10000),word_shapes(packet.get('text',''))))
     await asyncio.wait_for(collect(),timeout=12)
     if not data:
         raise ValueError('Edge returned no audio')
@@ -42,7 +42,7 @@ def play(data, stop, animation=None, words=()):
         levels=[]
         if animation:
             try:
-                from .avatar_audio import envelope
+                from .avatar_audio import envelope, word_shape
                 sound=pygame.mixer.Sound(file=io.BytesIO(data))
                 rate,fmt,channels=pygame.mixer.get_init()
                 levels=envelope(sound.get_raw(),rate,fmt,channels)
@@ -56,7 +56,7 @@ def play(data, stop, animation=None, words=()):
             if animation and levels:
                 position=max(0,pygame.mixer.music.get_pos());index=position//20;cues=[]
                 for i in range(index,min(index+8,len(levels))):
-                    at=i*20;pose=next((p for start,duration,p in words if start<=at<start+duration),1)
+                    at=i*20;pose=word_shape(words,at)
                     level=levels[i];cues.append([at,level,pose if level>.06 else 0])
                 animation.emit(position_ms=position,cues=cues,
                                openness=levels[index] if index<len(levels) else 0,

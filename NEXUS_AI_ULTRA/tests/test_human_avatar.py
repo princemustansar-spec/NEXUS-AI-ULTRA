@@ -55,6 +55,32 @@ def test_rig_and_alignment_bounds(tmp_path):
         with pytest.raises(ValueError):p.configure(body)
     store.db.close()
 
+FULL_RIG=dict(copy.deepcopy(DEFAULT_RIG),grid=[3,3],mouths=[[i,*DEFAULT_RIG['mouths'][0][1:]] for i in range(1,9)],shapes=list(range(1,9)),jaw=[.49,.55,.12,.07])
+
+def test_extended_rig_allows_more_mouth_frames_and_old_packs_stay_valid(tmp_path):
+    assert validate_rig(DEFAULT_RIG)==DEFAULT_RIG and validate_rig(FULL_RIG)==FULL_RIG
+    store=Store(tmp_path/'test.db');profile=HumanAvatar(tmp_path,store)
+    status=profile.import_file(pack({'rig.json':json.dumps(FULL_RIG).encode(),'expressions.png':png(192,192)}))
+    assert status['rig']['shapes']==list(range(1,9)) and status['rig']['grid']==[3,3] and len(status['rig']['mouths'])==8
+    assert HumanAvatar(tmp_path,store).status()['rig']==FULL_RIG
+    assert profile.import_file(pack())['rig']==DEFAULT_RIG;store.db.close()
+
+@pytest.mark.parametrize('change',[
+    dict(grid=[5,1]),dict(grid=[4,4]),dict(grid=[2]),dict(grid=[2.0,2]),dict(grid=[0,2]),   # grid size
+    dict(mouths=FULL_RIG['mouths'][:2],shapes=[1,2]),dict(mouths=FULL_RIG['mouths']+[FULL_RIG['mouths'][0]],shapes=list(range(1,10))),  # 3-8 mouth frames
+    dict(shapes=[1,2,3]),dict(shapes=[1,1,3,4,5,6,7,8]),dict(shapes=[0,2,3,4,5,6,7,8]),dict(shapes=[1,2,3,4,5,6,7,9]),dict(shapes='12345678'),  # shape list
+    dict(jaw=[.5,.5,0,.1]),dict(jaw=[.5,.5,.6,.1]),dict(jaw=[.5,.5,.1]),dict(jaw=[.5,float('nan'),.1,.1]),  # jaw region
+    dict(grid=[2,2]),dict(extra=1)])  # frame cell outside a 2x2 sheet; unknown key
+def test_extended_rig_rejects_bad_values(change):
+    rig=dict(copy.deepcopy(FULL_RIG),**change)
+    with pytest.raises(ValueError):validate_rig(rig)
+
+def test_frame_cell_must_exist_on_the_declared_sheet():
+    rig=copy.deepcopy(FULL_RIG);rig['mouths'][7][0]=9
+    with pytest.raises(ValueError):validate_rig(rig)
+    rig=copy.deepcopy(DEFAULT_RIG);rig['mouths'][0][0]=4
+    with pytest.raises(ValueError):validate_rig(rig)
+
 def fixture(tmp_path,monkeypatch):
     monkeypatch.setenv('NEXUS_DATA_DIR',str(tmp_path));import nexus.app
     return importlib.reload(nexus.app)
