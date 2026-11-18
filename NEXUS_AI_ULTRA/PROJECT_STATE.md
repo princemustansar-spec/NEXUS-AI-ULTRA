@@ -51,3 +51,33 @@ blink/mouth animation. Three mouth poses do not provide exact phoneme lip sync.
 Still requires the user's Windows laptop: perceived audio/lip alignment with
 their selected voice, actual portrait appearance, physical speaker/microphone and
 interruption behavior, and measured CPU/RAM on the Core i3/12 GB system.
+
+## Reply TTS update (18 November 2026, Asia/Riyadh)
+
+With online voice enabled, NEXUS sends one speech request per reply to the local
+FreeLLMAPI router using its existing unified key and audio `auto` chain. The
+installed router walks its configured audio models and skips entries without
+usable credentials. If the request fails, NEXUS uses Edge neural voice and then
+Windows SAPI. Offline voice uses SAPI. Auto-speak still defaults to ON and the
+existing online-voice setting controls whether reply text can leave the device.
+
+The existing dashboard toast shows the active voice provider and the reason for
+fallback. This FreeLLMAPI build returns the upstream provider on success and
+omits model and internal fallback details. NEXUS honors Retry-After on failures
+and otherwise waits 60 seconds for HTTP 429 or 30 seconds for other request
+failures before retrying across reply jobs.
+
+Local verification: explicit Gemini 3.1 Flash TTS returned quota HTTP 429 and
+explicit Kokoro returned HTTP 502 with no usable keys. Audio `auto` returned
+Google WAV and that audio played through pygame's dummy output with avatar cues.
+76 focused tests passed. Physical speaker playback still needs a listening test.
+
+User confirmed Google speech plays on physical speakers, including a longer reply.
+FreeLLMAPI speech now explicitly requests echo, which the installed router maps
+to the Google male Iapetus voice, following the request to change the female voice.
+
+Voice Assistant now has a Google / FreeLLMAPI Male/Female selector. The choice
+is stored in SQLite and read for every TTS job, including handsfree replies.
+Male requests echo (Google Iapetus), Female requests nova (Google Zephyr).
+The choice applies from the next reply. Edge and installed Windows voice settings
+continue to control their respective fallback voices.

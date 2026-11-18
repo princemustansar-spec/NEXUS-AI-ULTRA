@@ -70,7 +70,11 @@ const locale=node('select');locale.id='voice-locale';locale.append(new Option('M
 const silence=node('select');silence.id='voice-silence';for(const value of [.4,.8,1.2,2,3])silence.append(new Option(value+' seconds silence',value));silence.value=voicePreferences.silence_timeout;silence.onchange=()=>voicePreferences.silence_timeout=Number(silence.value);w.append(node('h4','Automatically finish after speech pauses'),silence);
 const onset=node('select');for(const value of [3,5,10,15])onset.append(new Option('Wait up to '+value+' seconds for speech',value));onset.value=voicePreferences.start_timeout;onset.onchange=()=>voicePreferences.start_timeout=Number(onset.value);w.append(node('h4','Speech start timeout'),onset);
 const shouldMute=!Boolean(state.voice_muted);const muteButton=button(shouldMute?'Mute microphone & speaker':'Unmute voice',async()=>{if(muteButton.disabled)return;muteButton.disabled=true;try{const saved=await api('voice/mute',{muted:shouldMute});state.voice_muted=saved.muted;if(shouldMute){await cancelVoice();await stopSpeaking();}await refresh();renderPage();toast(shouldMute?'Microphone and speaker muted.':'Voice unmuted. Press Start microphone or the floating mic to listen.');}finally{muteButton.disabled=false;}});muteButton.id='voice-mute-button';controls.append(muteButton);
-const online=node('input');online.type='checkbox';online.checked=localStorage.getItem('tts-online')==='yes';online.onchange=()=>localStorage.setItem('tts-online',online.checked?'yes':'no');const onlineRow=node('div',undefined,'row');onlineRow.append(online,node('label','Allow Edge neural voice (reply text is sent to Microsoft). Otherwise use Windows TTS.'));w.append(onlineRow);
+const online=node('input');online.type='checkbox';online.checked=localStorage.getItem('tts-online')==='yes';online.onchange=()=>localStorage.setItem('tts-online',online.checked?'yes':'no');const onlineRow=node('div',undefined,'row');onlineRow.append(online,node('label','Allow online TTS (FreeLLMAPI providers and Microsoft Edge may receive reply text). Otherwise use Windows TTS.'));w.append(onlineRow);
+const onlineVoice=node('select');onlineVoice.id='tts-online-voice';onlineVoice.append(new Option('Male','male'),new Option('Female','female'));onlineVoice.disabled=true;
+api('tts/settings',undefined,'GET').then(saved=>{onlineVoice.value=saved.online_voice;onlineVoice.disabled=false;}).catch(error);
+onlineVoice.onchange=async()=>{onlineVoice.disabled=true;try{const saved=await api('tts/settings',{online_voice:onlineVoice.value});onlineVoice.value=saved.online_voice;toast('Online voice saved. Applies to the next reply.');}catch(e){error(e);try{const saved=await api('tts/settings',undefined,'GET');onlineVoice.value=saved.online_voice;}catch{}}finally{onlineVoice.disabled=false;}};
+const onlineVoiceLabel=node('label','Google / FreeLLMAPI voice');onlineVoiceLabel.htmlFor='tts-online-voice';w.append(onlineVoiceLabel,onlineVoice);
 const lang=node('select');lang.id='voice-language';for(const [name,val] of [['English','en'],['Roman Urdu (editable spelling)','ur'],['Automatic language','auto']])lang.append(new Option(name,val));lang.value=voicePreferences.language;lang.onchange=()=>voicePreferences.language=lang.value;w.append(node('h4','Recognition language'),lang);
 const devices=node('select');devices.id='voice-device';devices.append(new Option('System default microphone',''));for(const d of voiceDevices)devices.append(new Option(d.name+' · '+d.host_api,d.id));if(voicePreferences.device!==null&&!voiceDevices.some(d=>d.id===voicePreferences.device))devices.append(new Option('Saved input device '+voicePreferences.device,voicePreferences.device));devices.value=voicePreferences.device===null?'':String(voicePreferences.device);devices.onchange=()=>voicePreferences.device=devices.value===''?null:Number(devices.value);w.append(node('h4','Input device — run diagnostics to populate'),devices);
 const duration=node('select');duration.id='voice-duration';for(const seconds of [5,8,10,15])duration.append(new Option(seconds+' seconds maximum',seconds));duration.value=voicePreferences.seconds;duration.onchange=()=>voicePreferences.seconds=Number(duration.value);w.append(node('h4','Push-to-talk duration'),duration);
@@ -81,7 +85,25 @@ function browserSpeak(text){if(!('speechSynthesis'in window))return toast('Speec
 async function stopSpeaking(){window.NexusHumanSpeech?.stop();clearTimeout(window.ttsPollTimer);await api('tts/stop',{});if('speechSynthesis'in window)speechSynthesis.cancel();}
 async function speak(text){
  try{if(state.voice_muted)throw Error('Voice is muted.');const job=await api('tts/speak',{text:String(text).slice(0,1800),allow_online:localStorage.getItem('tts-online')==='yes',preferred_voice:localStorage.getItem('voice')||''});setCore('speaking');clearTimeout(window.ttsPollTimer);
- const poll=async()=>{try{const st=await api('tts/status',undefined,'GET');if(st.job_id!==job.job_id)return;if(['done','error','cancelled'].includes(st.phase)){if(!busy)setCore('');if(st.phase==='error'){toast('Native speaker unavailable; trying installed browser/Windows voice.');browserSpeak(text);}return;}window.ttsPollTimer=setTimeout(poll,350);}catch(e){error(e);}};window.ttsPollTimer=setTimeout(poll,300);
+ let lastStatus='';
+ const poll=async()=>{
+  try{
+   const st=await api('tts/status',undefined,'GET');
+   if(st.job_id!==job.job_id)return;
+   const current=st.result||st;
+   const reason=current.fallback_reason?' | Fallback: '+current.fallback_reason:'';
+   const active=current.active_tts||(st.phase==='done'?current.provider:'');
+   const status=active?'TTS: '+active+reason:'';
+   if(st.phase==='error')toast('TTS failed: '+(st.error||'Speaker unavailable')+reason);
+   else if(status&&status!==lastStatus&&st.phase!=='cancelled'){toast(status);lastStatus=status;}
+   if(['done','error','cancelled'].includes(st.phase)){
+    if(!busy)setCore('');
+    return;
+   }
+   window.ttsPollTimer=setTimeout(poll,350);
+  }catch(e){error(e);}
+ };
+ window.ttsPollTimer=setTimeout(poll,300);
  }catch(e){error(e);}
 }
 function renderVoiceStatus(status){

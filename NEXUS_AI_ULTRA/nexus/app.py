@@ -31,6 +31,7 @@ voice = VoiceService(DATA)
 tts = VoiceService(DATA)
 human_avatar = HumanAvatar(DATA,store)
 tts.avatar_enabled = lambda: human_avatar.status()['enabled']
+tts.online_voice = lambda: store.get('tts_online_voice', 'male')
 session_token = secrets.token_urlsafe(32)
 pending = {}
 active = set()
@@ -489,6 +490,21 @@ async def voice_stop():
 @app.post('/api/voice/cancel')
 async def voice_cancel():
     return await asyncio.to_thread(voice.cancel)
+
+
+@app.get('/api/tts/settings')
+def tts_settings():
+    return {'online_voice': tts.online_voice()}
+
+
+@app.post('/api/tts/settings')
+async def save_tts_settings(request: Request):
+    body = await request.json()
+    choice = body.get('online_voice')
+    if choice not in ('male', 'female'):
+        raise ValueError('Choose Male or Female.')
+    store.set('tts_online_voice', choice)
+    return {'online_voice': choice}
 
 
 @app.post('/api/tts/speak')

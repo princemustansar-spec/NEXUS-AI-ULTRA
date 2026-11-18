@@ -230,6 +230,10 @@ def voice_worker(connection, stop_event, operation, options, directory, keep_ope
         elif operation == 'tts':
             from .tts import speak_reply
             extra={'avatar_sync':True} if options.get('avatar_sync') else {}
+            if options.get('online_voice') == 'female':
+                extra['online_voice'] = 'female'
+            if options.get('freellmapi_backoff'):
+                extra['freellmapi_backoff'] = options['freellmapi_backoff']
             result = speak_reply(options['text'], options.get('allow_online', False), stop_event, send, options.get('preferred_voice',''), **extra)
         else:
             import sounddevice as sd
@@ -306,12 +310,17 @@ class VoiceService:
         self.started = 0
         self.state = {'phase': 'idle', 'job_id': None}
         self.avatar_enabled = lambda: False
+        self.online_voice = lambda: 'male'
+        self.freellmapi_retry = (0, None)
 
     def _read_messages(self):
         if self.connection:
             try:
                 while self.connection.poll():
                     message = self.connection.recv()
+                    retry = message.pop('freellmapi_retry', None)
+                    if retry:
+                        self.freellmapi_retry = retry
                     self.state.update(message)
             except (EOFError, OSError):
                 pass
@@ -359,6 +368,8 @@ class VoiceService:
                 self.process.join(timeout=1)
             if self.process.is_alive():
                 raise ValueError('Could not stop the voice worker. Close the application.')
+            if self.state.get('operation') == 'tts':
+                self._read_messages()
             self._release()
             stage = self.directory.parent / '.tiny-download'
             if self.state.get('operation') == 'model' and stage.is_dir() and not stage.is_symlink():
@@ -407,6 +418,7 @@ class VoiceService:
         options = {'device':device,'language':language,'seconds':seconds,'engine':engine,'locale':locale,
                    'silence_timeout':silence_timeout,'start_timeout':start_timeout,'text':text,'allow_online':allow_online,'preferred_voice':preferred_voice,'discard_on_stop':discard_on_stop is True}
         if operation=='tts':
+            options['online_voice'] = self.online_voice()
             try:
                 if self.avatar_enabled():options['avatar_sync']=True
             except Exception:pass  # Optional portrait metadata must not prevent speech.
@@ -426,6 +438,9 @@ class VoiceService:
                     self._stop_process()
                 else:
                     raise ValueError('Another voice operation is running. Stop or cancel it first.')
+            retry_at, reason = self.freellmapi_retry
+            if operation == 'tts' and allow_online and time.monotonic() < retry_at:
+                options['freellmapi_backoff'] = reason
             receiver, sender = self.context.Pipe(duplex=False)
             event = self.context.Event()
             command_receiver, command_sender = self.context.Pipe(duplex=False)
