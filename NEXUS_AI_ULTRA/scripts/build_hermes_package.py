@@ -36,9 +36,12 @@ def build(output):
             entry['variants'].append(dict(previous_sha256=LAPTOP_STATE_HASH,sha256=entry['sha256'],source_path=name,operation='append'))
         entries.append(entry)
         payload['payload/'+name] = data
-    manifest = dict(format=2,baseline=BASELINE,hermes_build=BUILD,files=entries)
+    helper = (app/'scripts/hermes_installer_probe.py').read_bytes()
+    manifest = dict(format=3,baseline=BASELINE,hermes_build=BUILD,files=entries,
+                    installer_probe_sha256=hashlib.sha256(helper).hexdigest())
     payload['manifest.json'] = json.dumps(manifest,indent=2).encode()
     payload['Install-NexusHermes.ps1'] = (app/'install_hermes.ps1').read_bytes()
+    payload['installer_probe.py'] = helper
     patch = subprocess.check_output(['git','diff','--binary',BASELINE,'--','NEXUS_AI_ULTRA'],cwd=repository)
     if b'nexus/hermes_worker.py' not in patch:
         raise RuntimeError('Stage new source files before building the reviewable source patch.')

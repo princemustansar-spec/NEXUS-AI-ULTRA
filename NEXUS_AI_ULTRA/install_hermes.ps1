@@ -47,7 +47,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $Destination 'nexus/app.py') -PathTy
 if (-not (Test-Path -LiteralPath (Join-Path $HermesRoot 'run_agent.py') -PathType Leaf)) { throw 'Existing native Hermes installation not found. Nothing was installed.' }
 Assert-ClosedNexus
 $manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'manifest.json') -Raw | ConvertFrom-Json
-if ($manifest.format -ne 2 -or $manifest.hermes_build -ne 'caafe5389ae585ef77387a962aee05b1bcf17029') { throw 'Unsupported integration package.' }
+if ($manifest.format -ne 3 -or $manifest.hermes_build -ne 'caafe5389ae585ef77387a962aee05b1bcf17029') { throw 'Unsupported integration package. Extract the complete v3 ZIP.' }
+$probeHelper = Join-Path $PSScriptRoot 'installer_probe.py'
+if ((Get-HashOrNull $probeHelper) -ne $manifest.installer_probe_sha256) { throw 'Installer helper hash mismatch. Installation left unchanged.' }
 $candidates = @($manifest.files)
 if (-not $candidates.Count) { throw 'Empty integration package.' }
 $entries = @()
@@ -84,7 +86,7 @@ if (-not $HermesPython) {
     }
     foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-            $version = & $candidate -c 'import sys;print("%d.%d.%d" % sys.version_info[:3])'
+            $version = & $candidate -B $probeHelper version
             if ($LASTEXITCODE -eq 0 -and $version -eq '3.14.9') { $HermesPython = $candidate; break }
         }
     }
@@ -97,11 +99,10 @@ $stage = Join-Path ([IO.Path]::GetTempPath()) ('nexus-hermes-probe-' + [Guid]::N
 New-Item -ItemType Directory -Path $stage | Out-Null
 try {
     $probeError = Join-Path $stage 'probe.stderr'
-    $schemas = & $nexusPython -B -c 'import sys,json;sys.path.insert(0,sys.argv[1]);from nexus.tools import CATALOG;print(json.dumps([dict(type="function",function=dict(name=n,description=d,parameters=dict(type="object",properties={k:dict(type=v) for k,v in a.items()},required=list(a),additionalProperties=False))) for n,(d,_,a) in CATALOG.items()]))' $Destination
-    if ($LASTEXITCODE -ne 0) { throw 'Existing NEXUS tool catalog could not be loaded. No files changed.' }
     $schemasPath = Join-Path $stage 'schemas.json'
-    [IO.File]::WriteAllText($schemasPath, ($schemas -join "`n"), (New-Object System.Text.UTF8Encoding($false)))
-    $schemaCount = @((($schemas -join "`n") | ConvertFrom-Json)).Count
+    & $nexusPython -B $probeHelper schemas --installation $Destination --output $schemasPath
+    if ($LASTEXITCODE -ne 0) { throw 'Existing NEXUS tool catalog could not be loaded. No files changed.' }
+    $schemaCount = @((Get-Content -LiteralPath $schemasPath -Raw | ConvertFrom-Json)).Count
     $savedPreference = $ErrorActionPreference
     try {
         # Windows PowerShell 5 treats native stderr as error records. Keep diagnostic
@@ -167,7 +168,7 @@ try {
             }
             $applied += $record
         }
-        & $nexusPython -B -c 'import sys,os;sys.path.insert(0,sys.argv[1]);os.environ["NEXUS_DATA_DIR"]=sys.argv[2];import nexus.app as app;app.hermes.config();app.state();print("NEXUS Hermes configuration verified; app startup checked with isolated temporary data")' $Destination (Join-Path $stage 'postflight-data')
+        & $nexusPython -B $probeHelper check-app --installation $Destination --data (Join-Path $stage 'postflight-data')
         if ($LASTEXITCODE -ne 0) { throw 'NEXUS post-install import/configuration check failed.' }
     } catch {
         $installFailure = $_

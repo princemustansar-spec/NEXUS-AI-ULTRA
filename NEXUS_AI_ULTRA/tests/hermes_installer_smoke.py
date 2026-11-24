@@ -18,12 +18,12 @@ import uuid
 BASE = Path(__file__).resolve().parents[1]
 REPO = BASE.parent
 ROOT = Path('/workspace/hermes-installer-acceptance') / uuid.uuid4().hex
-ZIP = Path('/workspace/artifacts/NEXUS-Hermes-Integration-v2.zip')
+ZIP = Path('/workspace/artifacts/NEXUS-Hermes-Integration-v3.zip')
 PWSH = Path('/workspace/tooling/powershell/pwsh')
 HERMES_ROOT = Path(os.environ['HERMES_TEST_ROOT'])
 HERMES_HOME = Path(os.environ['HERMES_TEST_HOME'])
 HERMES_PYTHON = Path(os.environ['HERMES_TEST_PYTHON'])
-COMMAND = r"$z=Join-Path $env:USERPROFILE 'Downloads\NEXUS-Hermes-Integration-v2.zip'; $t=Join-Path ([IO.Path]::GetTempPath()) ('nexus-hermes-'+[Guid]::NewGuid().ToString('N')); Expand-Archive -LiteralPath $z -DestinationPath $t; & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $t 'Install-NexusHermes.ps1') -Destination (Join-Path $env:USERPROFILE 'NEXUS_AI_ULTRA')"
+COMMAND = r"$z=Join-Path $env:USERPROFILE 'Downloads\NEXUS-Hermes-Integration-v3.zip'; $t=Join-Path ([IO.Path]::GetTempPath()) ('nexus-hermes-'+[Guid]::NewGuid().ToString('N')); Expand-Archive -LiteralPath $z -DestinationPath $t; & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $t 'Install-NexusHermes.ps1') -Destination (Join-Path $env:USERPROFILE 'NEXUS_AI_ULTRA')"
 
 
 def digest(path):
@@ -145,6 +145,30 @@ def main():
     unchanged_external(external)
     results['missing_session_store_dependency_restores_laptop']='passed'
 
+    # Reproduce Windows PowerShell's native quoting mode in the same runspace as
+    # the installer; a fresh pwsh child would otherwise reset to Standard mode.
+    folder,user,dest,before,external,env=installation('legacy native mode with spaces')
+    extracted,notes=laptop_fixture(folder,user,dest,before)
+    result=run_ps("$global:PSNativeCommandArgumentPassing='Legacy'; & '"+str(extracted/'Install-NexusHermes.ps1')+"' -Destination '"+str(dest)+"'",env)
+    assert result.returncode==0,result.stdout+'\n'+result.stderr
+    assert 'configuration verified' in result.stdout
+    assert digest(dest/'nexus/app.py')==digest(BASE/'compatibility/laptop-7931f0/app.py')
+    assert (dest/'PROJECT_STATE.md').read_bytes().startswith(notes)
+    unchanged_external(external)
+    results['legacy_native_argument_mode_and_paths_with_spaces']='passed'
+
+    folder,user,dest,before,external,env=installation('helper-tampering')
+    extracted=folder/'package'
+    with zipfile.ZipFile(ZIP) as archive:archive.extractall(extracted)
+    helper=extracted/'installer_probe.py'
+    helper.write_text(helper.read_text()+"\nraise RuntimeError('must not execute')\n")
+    result=run_ps("& '"+str(extracted/'Install-NexusHermes.ps1')+"' -Destination '"+str(dest)+"'",env)
+    assert result.returncode!=0 and 'helper hash mismatch' in result.stderr
+    for name,value in before.items():assert digest(dest/name)==value,name
+    assert not list(user.glob('NEXUS_AI_ULTRA.hermes-backup-*'))
+    unchanged_external(external)
+    results['modified_helper_refused_before_execution']='passed'
+
     folder,user,dest,before,external,env=installation('modified-source')
     (dest/'nexus/app.py').write_text((dest/'nexus/app.py').read_text()+'\n# private local edit\n')
     edited=digest(dest/'nexus/app.py')
@@ -183,8 +207,8 @@ def main():
     assert not (user/'outside.py').exists();unchanged_external(external)
     results['unsafe_package_path_rejected']='passed'
     receipt=dict(platform='PowerShell 7.7.0 on Linux; native Windows not exercised',checks=results)
-    Path('/workspace/artifacts/hermes-installer-validation-v2.json').write_text(json.dumps(receipt,indent=2))
-    Path('/workspace/artifacts/NEXUS-Hermes-Install-Command-v2.ps1').write_text(COMMAND+'\n')
+    Path('/workspace/artifacts/hermes-installer-validation-v3.json').write_text(json.dumps(receipt,indent=2))
+    Path('/workspace/artifacts/NEXUS-Hermes-Install-Command-v3.ps1').write_text(COMMAND+'\n')
     print(json.dumps(receipt,indent=2))
 
 
