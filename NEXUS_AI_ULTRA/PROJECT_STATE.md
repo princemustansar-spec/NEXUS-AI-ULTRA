@@ -1,6 +1,68 @@
 # NEXUS AI ULTRA — project state
 
-Updated: 5 November 2026 (Asia/Riyadh).
+Updated: 24 November 2026 (Asia/Riyadh).
+
+## Hermes main-agent integration (local work; not pushed)
+
+- NEXUS baseline: `b630568caa735e756f96b22db07a354f041db88b`.
+- Local recoverable checkpoint: `checkpoint/pre-hermes-20261124`.
+- Local working branch: `feature/hermes-main-20261124`. No Git push or merge.
+- Existing native Hermes v0.23.3 / Python 3.14.9 is reused, pinned to supplied
+  build `caafe5389ae585ef77387a962aee05b1bcf17029`.
+- GUI chat and auto voice enter the real Hermes AIAgent loop. Exact legacy
+  commands use its scripted prelude; all model requests use the existing NEXUS
+  Providers instance and all actions use the existing approval/permission runner.
+- Enabled account fallback is added to that router for Hermes requests only.
+  Existing API discovery, model selection, timeouts, cooldowns and paid/local
+  policies remain authoritative. No independent Hermes provider is configured.
+- Current-turn tool receipts stay in model context across provider switches.
+  Mutation fingerprints/receipts are journaled before dispatch. Failures and
+  unknown outcomes do not automatically replay tasks/actions.
+- NEXUS branding, GUI/static assets, avatar, voice selection, existing database,
+  settings and credentials are preserved. Hermes gets an isolated NEXUS profile,
+  NEXUS-only tools and credential-free JSON-pipe callbacks. JARVIS/ZAYRON untouched.
+- Minimal hash-checked ZIP installer is provided. No model/package download
+  or API inference is performed by that installer. Existing Hermes source/profile
+  is not patched. Source backup is retained for testing/recovery.
+
+### Observed integration validation
+
+- Full NEXUS Python suite with the real Hermes SDK configured: **319 passed,
+  5 skipped** (NEXUS Python 3.12; Hermes Python 3.14.9). Existing recognition
+  dependencies were installed only in an isolated cloud test directory.
+- Ten focused main-agent cases are included in that total. They run the real
+  pinned AIAgent, production router and controlled HTTP servers, exercising 429,
+  503 and actual six-second timeout fallback; identical context at the switched
+  provider; enabled-account failure; duplicate calls with different IDs; real
+  approved file creation; exhausted-provider failure without restart; shared
+  GUI/voice dispatch; reusable worker PID; explicit voice-command prelude; and
+  Emergency Stop during an in-flight request.
+- Legacy chat API tests now exercise the actual Hermes main agent rather than
+  assuming the removed app-local planning loop. They report an explicit SDK
+  requirement skip if no external Hermes test runtime is supplied.
+- PowerShell **7.7.0 on Linux** executes the exact delivery command with native-
+  layout path fixtures, default interpreter discovery and the real Hermes probe.
+  Checks cover successful integration, source backup, SQLite/avatar/shortcut/
+  private-profile preservation, refusal of unknown source edits, restoration
+  after an induced post-install failure and rejection of a traversal path.
+- ZIP CRCs, payload SHA-256 values and prior source hashes are checked. The ZIP
+  contains a reviewable source patch, focused test file and minimal payload;
+  no credentials, application data, private portraits, Hermes dependencies or
+  models are included. Static GUI, avatar, voice/TTS, hands-free and store source
+  files are byte-identical to the inspected NEXUS baseline.
+
+Native Windows PowerShell/WebView2 and installed interpreter discovery on the
+actual laptop remain unverified. No live user provider inference, subscription
+request, physical microphone/speaker or message sending was performed. Real
+provider access, hardware latency, interruption echo and CPU/RAM need laptop
+acceptance. Controlled providers verify switching behavior, not guaranteed live
+service availability. No zero-downtime or guaranteed-fallback claim is made.
+Details: `docs/HERMES_MAIN_AGENT.md`.
+
+## Archived avatar notes (5 November 2026)
+
+These notes predate the baseline's later avatar lip-sync update. The Hermes
+integration leaves the baseline's current avatar code and assets unchanged.
 
 ## Baseline and recovery
 

@@ -122,7 +122,7 @@ def test_forbidden_voice_is_rejected(tmp_path):
             v.VoiceService(tmp_path).start('tts',text='Hello',preferred_voice=name)
 
 
-def test_online_consent_and_mute_gate_recording_not_text_chat(tmp_path,monkeypatch):
+def test_online_consent_and_mute_gate_recording_not_text_chat(tmp_path,monkeypatch,configured_hermes):
     import importlib
     from fastapi.testclient import TestClient
     import nexus.app

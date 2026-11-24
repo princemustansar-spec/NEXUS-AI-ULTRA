@@ -1,4 +1,5 @@
 import importlib
+import json
 from urllib.parse import urlparse, parse_qs
 from unittest.mock import Mock
 import pytest
@@ -35,20 +36,29 @@ def browser_client(tmp_path,monkeypatch):
     app.store.db.close()
 
 
-def test_youtube_executes_without_approval_and_reports_request_only(browser_client):
+def test_youtube_executes_without_approval_and_reports_request_only(browser_client,configured_hermes,monkeypatch):
     client,app,opened=browser_client
+    async def inference(messages,tools=None,allow_paid=False,**kwargs):
+        assert not allow_paid
+        assert json.loads(messages[-1]['content'])['result']['browser_requested']
+        return dict(role='assistant',content='Browser request bhej di. Play karein.'),'Test transport','fixture'
+    monkeypatch.setattr(app.providers,'request',inference)
     response=client.post('/api/chat',json={'text':'youtube open karo sad song'})
     assert response.status_code==200
     assert 'request' in response.json()['text'] and 'Play karein' in response.json()['text']
-    assert response.json()['provider']=='NEXUS browser'
+    assert response.json()['provider']=='Test transport' and response.json()['agent']=='Hermes'
     assert opened.call_count==1
     assert parse_qs(urlparse(opened.call_args.args[0]).query)['search_query']==['sad song']
     assert not app.pending
     assert len(app.store.list('chat'))==2
 
 
-def test_browser_failure_is_reported_instead_of_success(browser_client):
+def test_browser_failure_is_reported_instead_of_success(browser_client,configured_hermes,monkeypatch):
     client,app,opened=browser_client;opened.return_value=False
+    async def inference(messages,tools=None,allow_paid=False,**kwargs):
+        assert not json.loads(messages[-1]['content'])['result']['browser_requested']
+        return dict(role='assistant',content='Browser launch nahi hua.'),'Test transport','fixture'
+    monkeypatch.setattr(app.providers,'request',inference)
     response=client.post('/api/chat',json={'text':'open youtube'})
     assert response.status_code==200 and 'launch nahi hua' in response.json()['text']
     assert not app.pending

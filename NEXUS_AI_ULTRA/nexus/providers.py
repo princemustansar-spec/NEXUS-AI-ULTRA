@@ -177,23 +177,26 @@ class Providers:
             return f'Provider HTTP {exc.response.status_code}: {exc.response.reason_phrase}'
         return type(exc).__name__ + ': ' + str(exc).split('Bearer')[0][:180]
 
-    async def request(self, messages, tools=None, allow_paid=False):
+    async def request(self, messages, tools=None, allow_paid=False, *, fallback_accounts=False):
         from . import ollama_local
         configs=self.configs();local=next((p for p in configs if p['id']=='ollama' and p['enabled']),None)
         preferred=self.store.get('preferred_provider','')
         if local and (preferred=='ollama' or not any(p['enabled'] for p in configs if p['id']!='ollama')):
             try:return await ollama_local.request(self,messages,tools)
             except (httpx.HTTPError,ValueError,KeyError,TypeError) as exc:raise ValueError('Local Ollama: '+self.error(exc)) from None
-        try:return await self._request_remote(messages,tools,allow_paid)
+        try:
+            if fallback_accounts:
+                return await self._request_remote(messages,tools,allow_paid,fallback_accounts=True)
+            return await self._request_remote(messages,tools,allow_paid)
         except ValueError:
             if not local or not self.store.get('ollama_fallback',False):raise
             try:return await ollama_local.request(self,messages,tools)
             except (httpx.HTTPError,ValueError,KeyError,TypeError) as exc:raise ValueError('Ollama fallback unavailable: '+self.error(exc)) from None
 
-    async def _request_remote(self, messages, tools=None, allow_paid=False):
+    async def _request_remote(self, messages, tools=None, allow_paid=False, *, fallback_accounts=False):
         errors = []
         preferred = self.store.get('preferred_provider', '')
-        if preferred in ('chatgpt-account','claude-account'):
+        if preferred in ('chatgpt-account','claude-account') and not fallback_accounts:
             self.active=None
             try:
                 async with asyncio.timeout(45):msg,model=await self.accounts.request(preferred,messages,tools)
@@ -214,7 +217,7 @@ class Providers:
             async with asyncio.timeout(45):
                 async with httpx.AsyncClient(timeout=httpx.Timeout(6, connect=3), follow_redirects=False) as c:
                     for p in configs:
-                        if p.get('kind')=='account' or p['id']=='ollama':continue
+                        if p['id']=='ollama':continue
                         if not p['enabled']:
                             continue
                         if p['paid'] and not allow_paid:
@@ -223,6 +226,23 @@ class Providers:
                         if self.cooldowns.get(p['id'], 0) > time.monotonic():
                             errors.append(p['name'] + ': provider cooldown active')
                             continue
+                        if p.get('kind')=='account':
+                            if not fallback_accounts:continue
+                            try:
+                                async with asyncio.timeout(6):
+                                    msg,model=await self.accounts.request(p['id'],messages,tools)
+                                if not isinstance(msg,dict) or not (msg.get('content') or msg.get('tool_calls')):
+                                    raise ValueError('Account returned no text or tools')
+                                self.active=dict(provider=p['name'],provider_id=p['id'],model=model)
+                                self.status[p['id']]=dict(connected=True,models=[model],error=None)
+                                return msg,p['name'],model
+                            except asyncio.CancelledError:raise
+                            except Exception as exc:
+                                self.cooldowns[p['id']]=time.monotonic()+60
+                                error=self.error(exc)
+                                self.status[p['id']]=dict(connected=False,models=[],error=error)
+                                errors.append(p['name']+': '+error)
+                                continue
                         manual = p.get('model', '').strip()
                         if manual and manual.upper() != 'AUTO':
                             models = [manual]
@@ -266,6 +286,8 @@ class Providers:
                                             delay = min(300, max(60, float(exc.response.headers.get('Retry-After', '60'))))
                                         except ValueError:
                                             pass
+                                        if fallback_accounts:
+                                            self.cooldowns[p['id']]=time.monotonic()+delay
                                     if exc.response.status_code in (401, 403):
                                         self.cooldowns[p['id']] = time.monotonic() + 60
                                 self.model_cooldowns[key] = time.monotonic() + delay

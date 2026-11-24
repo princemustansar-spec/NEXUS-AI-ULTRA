@@ -6,14 +6,14 @@ import pytest
 
 
 @pytest.mark.parametrize('source', ['voice', 'text', None])
-def test_chat_preserves_transcript_and_explains_app_capabilities(tmp_path, monkeypatch, source):
+def test_chat_preserves_transcript_and_explains_app_capabilities(tmp_path, monkeypatch, source, configured_hermes):
     monkeypatch.setenv('NEXUS_DATA_DIR', str(tmp_path))
     import nexus.app
     m = importlib.reload(nexus.app)
     # Older incorrect assistant replies must not remove current app context.
     m.store.add('chat', dict(role='assistant', text='I cannot hear you. Type your message.'))
     captured = []
-    async def inference(messages, tools=None, allow_paid=False):
+    async def inference(messages, tools=None, allow_paid=False, **kwargs):
         captured.append((messages, allow_paid))
         return {'role':'assistant', 'content':'Ji, aapki baat text mein mil gai hai.'}, 'Test', 'model'
     monkeypatch.setattr(m.providers, 'request', inference)

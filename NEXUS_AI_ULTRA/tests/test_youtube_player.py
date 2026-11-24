@@ -101,15 +101,18 @@ def test_no_native_session_or_host_does_not_open_a_personal_browser():
     with pytest.raises(ValueError,match='native NEXUS Windows'):p.command('play','fixture')
 
 
-def test_chat_uses_previous_search_and_media_controls_without_paid_call(tmp_path,monkeypatch):
+def test_chat_uses_previous_search_and_media_controls_without_paid_call(tmp_path,monkeypatch,configured_hermes):
     monkeypatch.setenv('NEXUS_DATA_DIR',str(tmp_path))
     import nexus.app
     m=importlib.reload(nexus.app)
     m.store.add('chat',dict(role='user',text='youtube open karo sad song'))
     player=Mock(return_value={'status':'playing','title':'Fixture song','url':'https://www.youtube.com/watch?v=fixture'})
     monkeypatch.setattr('nexus.youtube.player.command',player)
-    async def no_model(*a,**k):pytest.fail('No model or paid inference needed for media commands')
-    monkeypatch.setattr(m.providers,'request',no_model)
+    async def inference(messages,tools=None,allow_paid=False,**kwargs):
+        assert not allow_paid
+        assert json.loads(messages[-1]['content'])['result']['status']=='playing'
+        return dict(role='assistant',content='Playback verify ho gaya.'),'Test transport','fixture'
+    monkeypatch.setattr(m.providers,'request',inference)
     with TestClient(m.app) as client:
         client.headers['x-nexus-token']=m.session_token
         r=client.post('/api/chat',json={'text':'jo gana search kiya hin usy play kro','input_source':'voice'})
