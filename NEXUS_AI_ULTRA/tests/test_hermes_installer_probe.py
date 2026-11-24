@@ -28,7 +28,7 @@ def test_installer_schema_file_preserves_quotes_and_unicode(tmp_path):
 @pytest.mark.skipif(sys.platform!='win32',reason='Requires native Windows PowerShell 5.1')
 def test_native_windows_powershell_51_installer_helpers(tmp_path):
     powershell=shutil.which('powershell.exe')
-    if not powershell:pytest.skip('Native Windows PowerShell unavailable')
+    assert powershell,'Native Windows PowerShell 5.1 is required for this compatibility test'
     script=Path(__file__).with_name('windows_hermes_probe.ps1')
     result=subprocess.run([powershell,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(script),
         '-Python',sys.executable,'-Helper',str(HELPER),'-Scratch',str(tmp_path)],capture_output=True,text=True,timeout=60)

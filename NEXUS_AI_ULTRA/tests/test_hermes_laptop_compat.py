@@ -23,7 +23,7 @@ LAPTOP_HASH = '7931f0dbef329bcddc925547e1a30a47915fb9d9aaae26640bf1dde2f9a05e1d'
 def test_exact_laptop_baseline_and_existing_controllers_are_preserved():
     original=(COMPAT/'baseline_app.py').read_bytes()
     assert hashlib.sha256(original).hexdigest()==LAPTOP_HASH
-    before=ast.parse(original.decode());after=ast.parse((COMPAT/'app.py').read_text())
+    before=ast.parse(original.decode());after=ast.parse((COMPAT/'app.py').read_text(encoding='utf-8'))
     old={n.name:n for n in before.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
     new={n.name:n for n in after.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
     assert old.keys()==new.keys()
@@ -34,7 +34,7 @@ def test_exact_laptop_baseline_and_existing_controllers_are_preserved():
     old_lock=guard.body[0]
     new_lock=next(n for n in new['chat'].body if isinstance(n,ast.Try)).body[0]
     assert ast.dump(old_lock.body[0])==ast.dump(new_lock.body[0])  # stale chat ID rejection
-    assert "tts.online_voice = lambda: store.get('tts_online_voice', 'male')" in (COMPAT/'app.py').read_text()
+    assert "tts.online_voice = lambda: store.get('tts_online_voice', 'male')" in (COMPAT/'app.py').read_text(encoding='utf-8')
 
 
 def test_laptop_variant_enters_real_hermes_and_retains_session_voice_apis(runtime,tmp_path,monkeypatch):
@@ -43,7 +43,7 @@ def test_laptop_variant_enters_real_hermes_and_retains_session_voice_apis(runtim
     module.__package__='nexus'
     module.__file__=str(Path(__file__).parents[1]/'nexus/app.py')
     monkeypatch.setitem(sys.modules,module.__name__,module)
-    exec(compile((COMPAT/'app.py').read_text(),module.__file__,'exec'),module.__dict__)
+    exec(compile((COMPAT/'app.py').read_text(encoding='utf-8'),module.__file__,'exec'),module.__dict__)
     module.hermes=HermesAgent(runtime,module.DATA,module.providers,module.queue_tool,lambda:module.emergency)
     module.store.set('active_chat','existing-session')
     # The actual laptop already supplies these APIs; their implementation is left untouched.
