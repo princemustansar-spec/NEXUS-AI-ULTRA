@@ -101,17 +101,17 @@ def test_memory_and_settings(client):
     c.delete('/api/records/memory/'+str(ident))
     assert not c.get('/api/state').json()['memory']
 
-def test_provider_missing_and_https(client):
+def test_provider_missing_and_https(client,configured_hermes):
     c,m=client
     r=c.post('/api/chat',json={'text':'Hello'})
     assert r.status_code==400 and 'No enabled provider' in r.json()['detail']
     p=dict(id='test',name='Test',base='http://remote.example/v1',model='x',kind='openai',paid=True,enabled=True)
     assert c.post('/api/settings',json={'providers':[p]}).status_code==400
 
-def test_provider_tool_loop(client,monkeypatch):
+def test_provider_tool_loop(client,monkeypatch,configured_hermes):
     c,m=client
     calls=[]
-    async def request(messages,tools=None,allow_paid=False):
+    async def request(messages,tools=None,allow_paid=False,**kwargs):
         calls.append(messages.copy())
         if len(calls)==1:
             return {'role':'assistant','content':None,'tool_calls':[{'id':'call1','type':'function','function':{'name':'system_info','arguments':'{}'}}]},'Test transport','test-model'
@@ -165,7 +165,7 @@ def test_tool_input_validation(client):
     assert c.post('/api/tools/system_info',json={'unexpected':'argument'}).status_code==400
     assert c.post('/api/tools/unknown',json={}).status_code==400
 
-def test_cancel_inflight(client,monkeypatch):
+def test_cancel_inflight(client,monkeypatch,configured_hermes):
     c,m=client
     async def scenario():
         started=asyncio.Event()
@@ -175,7 +175,7 @@ def test_cancel_inflight(client,monkeypatch):
         monkeypatch.setattr(m.providers,'request',slow)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=m.app),base_url='http://127.0.0.1:8765',headers={'x-nexus-token':m.session_token}) as h:
             task=asyncio.create_task(h.post('/api/chat',json={'text':'slow'}))
-            await asyncio.wait_for(started.wait(),2)
+            await asyncio.wait_for(started.wait(),15)
             response=await h.post('/api/cancel',json={})
             assert response.status_code==200
             cancelled=await asyncio.wait_for(task,2)
@@ -203,7 +203,7 @@ def test_image_transport(tmp_path,monkeypatch):
     with pytest.raises(ValueError,match='approval'):asyncio.run(p.image('image','test'))
     assert asyncio.run(p.image('image','test',True))[0]['b64_json']=='fixture'
 
-def test_sensitive_ai_call_queues_without_execution(client,monkeypatch,tmp_path):
+def test_sensitive_ai_call_queues_without_execution(client,monkeypatch,tmp_path,configured_hermes):
     c,m=client;m.store.set('roots',[str(tmp_path)]);count=0
     async def request(*args,**kwargs):
         nonlocal count

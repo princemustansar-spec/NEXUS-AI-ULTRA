@@ -1,6 +1,129 @@
 # NEXUS AI ULTRA — project state
 
-Updated: 5 November 2026 (Asia/Riyadh).
+Updated: 25 November 2026 (Asia/Riyadh).
+
+## Hermes main-agent integration (delivery branch; not merged)
+
+- NEXUS baseline: `b630568caa735e756f96b22db07a354f041db88b`.
+- Local recoverable checkpoint: `checkpoint/pre-hermes-20261124`.
+- Delivery branch: `feature/hermes-main-20261124`. Source/package publication
+  was authorized by the user; the integration is not merged into main.
+- Existing native Hermes v0.23.3 / Python 3.14.9 is reused, pinned to supplied
+  build `caafe5389ae585ef77387a962aee05b1bcf17029`.
+- GUI chat and auto voice enter the real Hermes AIAgent loop. Exact legacy
+  commands use its scripted prelude; all model requests use the existing NEXUS
+  Providers instance and all actions use the existing approval/permission runner.
+- Enabled account fallback is added to that router for Hermes requests only.
+  Existing API discovery, model selection, timeouts, cooldowns and paid/local
+  policies remain authoritative. No independent Hermes provider is configured.
+- Current-turn tool receipts stay in model context across provider switches.
+  Mutation fingerprints/receipts are journaled before dispatch. Failures and
+  unknown outcomes do not automatically replay tasks/actions.
+- NEXUS branding, GUI/static assets, avatar, voice selection, existing database,
+  settings and credentials are preserved. Hermes gets an isolated NEXUS profile,
+  NEXUS-only tools and credential-free JSON-pipe callbacks. JARVIS/ZAYRON untouched.
+- Minimal hash-checked ZIP installer is provided. No model/package download
+  or API inference is performed by that installer. Existing Hermes source/profile
+  is not patched. Source backup is retained for testing/recovery.
+
+### Observed integration validation
+
+- Full NEXUS Python suite with the real Hermes SDK configured: **319 passed,
+  5 skipped** (NEXUS Python 3.12; Hermes Python 3.14.9). Existing recognition
+  dependencies were installed only in an isolated cloud test directory.
+- Ten focused main-agent cases are included in that total. They run the real
+  pinned AIAgent, production router and controlled HTTP servers, exercising 429,
+  503 and actual six-second timeout fallback; identical context at the switched
+  provider; enabled-account failure; duplicate calls with different IDs; real
+  approved file creation; exhausted-provider failure without restart; shared
+  GUI/voice dispatch; reusable worker PID; explicit voice-command prelude; and
+  Emergency Stop during an in-flight request.
+- Legacy chat API tests now exercise the actual Hermes main agent rather than
+  assuming the removed app-local planning loop. They report an explicit SDK
+  requirement skip if no external Hermes test runtime is supplied.
+- PowerShell **7.7.0 on Linux** executes the exact delivery command with native-
+  layout path fixtures, default interpreter discovery and the real Hermes probe.
+  Checks cover successful integration, source backup, SQLite/avatar/shortcut/
+  private-profile preservation, refusal of unknown source edits, restoration
+  after an induced post-install failure and rejection of a traversal path.
+- ZIP CRCs, payload SHA-256 values and prior source hashes are checked. The ZIP
+  contains a reviewable source patch, focused test file and minimal payload;
+  no credentials, application data, private portraits, Hermes dependencies or
+  models are included. Static GUI, avatar, voice/TTS, hands-free and store source
+  files are byte-identical to the inspected NEXUS baseline.
+
+The native Windows checks below supplement this original Linux validation;
+installed interpreter discovery on the actual laptop remains unverified.
+No live user provider inference, subscription
+request, physical microphone/speaker or message sending was performed. Real
+provider access, hardware latency, interruption echo and CPU/RAM need laptop
+acceptance. Controlled providers verify switching behavior, not guaranteed live
+service availability. No zero-downtime or guaranteed-fallback claim is made.
+Details: `docs/HERMES_MAIN_AGENT.md`.
+
+### Reviewed laptop compatibility update
+
+- Local checkpoint before this update: `checkpoint/pre-laptop-app-compat-20261125`.
+- The original package correctly refused laptop app SHA-256
+  `7931f0dbef329bcddc925547e1a30a47915fb9d9aaae26640bf1dde2f9a05e1d`.
+  The supplied source has New Chat/session APIs and Male/Female voice controls.
+- A conflict-free reviewed merge is stored under `compatibility/laptop-7931f0/`.
+  Its payload SHA-256 is
+  `971e16a30cb414a67afbd10a82c137546810bb1c9f5e540719ae3d1bb842d601`.
+  Existing controllers other than chat, lifespan and safety are unchanged.
+- The supplied account_providers.py is byte-identical to the baseline and is
+  left untouched. User-provided hashes confirm the existing providers.py and
+  .gitignore match the original tested baseline.
+- A reviewed different project-state hash is accepted only for append mode.
+  The original private notes are not uploaded or replaced. All code baselines
+  still require exact recognized hashes; there is no force option.
+- Format-2 installer selects the matching stock/laptop payload, backs up original
+  bytes, stages appended notes, and checks app import/state with temporary data.
+  Missing dependencies cause restoration instead of a broken successful install.
+- The user session-store and voice source files are not modified. Session API
+  delegation is tested with collaborators; their unpublished internals and native
+  Windows behavior require laptop acceptance.
+- Updated full suite with the real Hermes SDK: **321 passed, 5 skipped**. New
+  compatibility tests verify all untouched uploaded controllers and run the
+  reviewed app through the real Hermes bridge, including stale-chat rejection,
+  session API delegation and saved voice settings.
+- Seven PowerShell 7.7/Linux checks passed: stock install, exact laptop app
+  selection with retained notes, unchanged source/data/voice-store dependencies,
+  source refusal, failure restoration, traversal refusal and restoration when a
+  required session-store dependency is missing. A session-store interface and
+  private-note fixture are used where unpublished source/content was not supplied;
+  those originals are not falsely claimed as cloud-tested.
+
+### Windows PowerShell quoting fix (v3)
+
+- Checkpoint: `checkpoint/pre-hermes-ps-quoting-20261125` at `6605758`.
+- Reproduced the user's exact `%d.%d.%d` SyntaxError under Legacy native
+  argument passing. Embedded Python string quotes had been removed by the shell.
+  This preflight failure did not modify the laptop's application files.
+- All three inline Python probes now use a hash-verified helper file: version,
+  tool-schema export and temporary-data app startup. Format-3 packages require
+  that helper. No Python command string or schema JSON crosses native arguments.
+- Full Linux suite with real Hermes SDK: **323 passed, 6 skipped**. Nine
+  PowerShell 7.7/Linux installer checks passed, including Legacy mode with spaces
+  in paths and modified-helper refusal, plus the previous preservation/refusal/
+  restoration checks. Reviewed laptop source still keeps all existing controllers.
+- Native Windows CI at `4eace97ad1b20c3e468654435b989c434994322a` passed:
+  **307 passed, 22 skipped**. Its real Windows PowerShell 5.1 test first observes
+  the original quoting failure, then verifies the file-based version, quoted/
+  Unicode schema and fixture-app startup probes with paths containing spaces.
+  Existing WebView2 drag/hover/mic-control fixtures, WhatsApp local fixture,
+  disposable updater/rollback and SAPI diagnostics also passed.
+  Run: https://github.com/princemustansar-spec/NEXUS-AI-ULTRA/actions/runs/45497479290
+- Windows CI does not contain the user's Hermes runtime; its helper startup
+  check uses a disposable app fixture. Full native Hermes installation, actual
+  laptop discovery, live provider inference and physical voice latency remain
+  unverified. No guaranteed fallback or zero downtime is claimed.
+- v1/v2 delivery archives remain unchanged; use the v3 ZIP and command.
+
+## Archived avatar notes (5 November 2026)
+
+These notes predate the baseline's later avatar lip-sync update. The Hermes
+integration leaves the baseline's current avatar code and assets unchanged.
 
 ## Baseline and recovery
 

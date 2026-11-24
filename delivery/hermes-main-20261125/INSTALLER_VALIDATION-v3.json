@@ -1,0 +1,14 @@
+{
+  "platform": "PowerShell 7.7.0 on Linux; native Windows not exercised",
+  "checks": {
+    "exact_delivery_command_and_default_discovery": "passed",
+    "source_backup_and_unrelated_data_preservation": "passed",
+    "reviewed_laptop_variant_and_note_preservation": "passed",
+    "missing_session_store_dependency_restores_laptop": "passed",
+    "legacy_native_argument_mode_and_paths_with_spaces": "passed",
+    "modified_helper_refused_before_execution": "passed",
+    "unknown_source_refusal_before_patch": "passed",
+    "failed_application_restores_original_files": "passed",
+    "unsafe_package_path_rejected": "passed"
+  }
+}

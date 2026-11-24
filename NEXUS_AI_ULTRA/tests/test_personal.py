@@ -59,10 +59,14 @@ def app_fixture(tmp_path,monkeypatch):
     module.store.set('voice_muted',True)
     return module
 
-def test_settings_routine_briefing_and_lock_confirmation_routes(tmp_path,monkeypatch):
+def test_settings_routine_briefing_and_lock_confirmation_routes(tmp_path,monkeypatch,configured_hermes):
     app=app_fixture(tmp_path,monkeypatch)
     execute=app.tools.execute;locked=Mock(return_value={'lock_requested':True})
     monkeypatch.setattr(app.tools,'execute',lambda name,args:locked() if name=='pc_lock' else execute(name,args))
+    async def inference(messages,tools=None,allow_paid=False,**kwargs):
+        assert json.loads(messages[-1]['content'])['approval_required']
+        return dict(role='assistant',content='PC lock confirmation tayyar hai.'),'Test transport','fixture'
+    monkeypatch.setattr(app.providers,'request',inference)
     with TestClient(app.app) as c:
         assert c.post('/api/personal/settings',json={'preferred_name':'Friend'}).status_code==403
         c.headers['x-nexus-token']=app.session_token
