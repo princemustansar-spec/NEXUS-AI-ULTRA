@@ -85,7 +85,7 @@ in the payload. API delegation is tested with session-store collaborators; their
 unpublished store internals are not claimed as tested in the cloud.
 
 The user also supplied the hash of a different PROJECT_STATE.md, without sharing
-its contents. Format-2 packages append a small integration note to either reviewed
+its contents. Packages append a small integration note to either reviewed
 state baseline, preserving the document's original bytes. Backup/restore and
 concurrent-change checks use the original raw hashes. The ZIP does not contain
 that private document. Only this documentation path permits append operations.
@@ -98,9 +98,17 @@ files and notes. No force/ignore-baseline switch is introduced.
 
 ## Installation
 
-Save **NEXUS-Hermes-Integration-v2.zip** to Downloads. Close NEXUS completely and run
+Save **NEXUS-Hermes-Integration-v3.zip** to Downloads. Close NEXUS completely and run
 the provided PowerShell command to extract it into a fresh temporary folder and
 invoke **Install-NexusHermes.ps1** against the existing installation.
+
+Version 3 fixes Windows PowerShell 5.1 removing embedded quotes from native
+Python `-c` arguments. The version, tool-schema and app-startup probes now run
+through a bundled Python file, verified against its format-3 manifest hash before
+execution. Schemas travel through a UTF-8 JSON file. No inline Python code or
+JSON string is passed through native command arguments. The reported SyntaxError
+in version 2 occurred before application files were changed; it did not establish
+that the existing Hermes interpreter was missing.
 
 The installer verifies package hashes and the prior hashes of every file it
 will change, selects only a reviewed matching app variant, probes the real
@@ -118,13 +126,23 @@ by the user. No WSL installation is created or required.
 
 ## Validation and limits
 
-The v2 full suite passed **321 tests with 5 skips** using the real pinned Hermes
+The v3 full Linux suite passed **323 tests with 6 skips** using the real pinned Hermes
 runtime. Its reviewed laptop app receives real bridge responses; session API
 collaborators verify delegation without claiming to test the user's unpublished
-store implementation. Seven PowerShell/Linux checks cover both app variants,
+store implementation. Nine PowerShell 7.7/Linux installer checks cover both app variants,
 original note/data preservation, refusal of unknown code, startup dependency
-failure recovery and unsafe-path refusal. The private-note fixture uses its own
+failure recovery, unsafe-path refusal, Legacy native argument passing with spaces
+in paths, and refusal of a modified helper before executing it. The private-note fixture uses its own
 reviewed hash because the user's actual document was never uploaded.
+
+Native Windows CI at commit `4eace97ad1b20c3e468654435b989c434994322a`
+passed **307 tests with 22 skips**, including a real Windows PowerShell 5.1 test:
+the old inline version command fails as expected, while the file-based version,
+quoted/Unicode schemas and app-startup probes succeed with paths containing
+spaces. The app-startup probe in that test uses a disposable fixture, not the
+user's Hermes installation. Existing WebView2 drag/hover/mic-control fixtures,
+the WhatsApp local fixture, disposable updater/rollback and SAPI diagnostics
+also passed. Run: https://github.com/princemustansar-spec/NEXUS-AI-ULTRA/actions/runs/45497479290
 
 Focused acceptance runs the actual pinned Hermes source and Python 3.14.9,
 the production NEXUS router and controlled HTTP provider endpoints. It is not
@@ -133,9 +151,10 @@ timeouts, context transfer, tool receipts, duplicate protection, GUI/voice
 dispatch and existing approval execution on temporary files.
 
 PowerShell installer verification and the exact observed results are recorded in
-[PROJECT_STATE.md](../PROJECT_STATE.md). Physical Windows WebView2, speakers,
-microphone/echo, real user provider credentials, native Hermes startup latency
-and the user's installed Python/runtime path discovery need laptop acceptance.
+[PROJECT_STATE.md](../PROJECT_STATE.md). The full Hermes installer on native
+Windows, physical speakers/microphone/echo, real user provider credentials,
+native Hermes startup latency and the user's installed Python/runtime path
+discovery still need laptop acceptance.
 No zero-downtime, guaranteed fallback, instant voice or hardware performance claim
 is made. Installation requires closing NEXUS. JARVIS and ZAYRON are not modified.
 

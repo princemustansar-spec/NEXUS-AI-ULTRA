@@ -16,11 +16,14 @@ The latter retains its New Chat, saved chat selection, active-chat guard and
 Male/Female voice settings. Other code versions are refused. This section is
 appended to retain prior project notes; their original bytes are backed up.
 
-The updated suite passed 321 tests (5 skipped), with the real Hermes SDK,
-controlled HTTP providers and reviewed laptop variant. Seven PowerShell/Linux
-installer checks passed; details are in the HERMES_MAIN_AGENT guide. App startup
-and dependency checks use temporary data rather than the real user database.
-The installer checks app
-startup against temporary data, never the existing user database. Native Windows,
-live providers, physical microphone/speaker and actual session-store behavior
-still need laptop acceptance. No guaranteed fallback or zero downtime is claimed.
+Version 3 fixes legacy Windows PowerShell stripping quotes from Python commands.
+Version/schema/startup probes use a hash-verified helper file and UTF-8 JSON.
+The Linux suite passed 323 tests (6 skipped), with the real Hermes SDK and
+controlled HTTP providers. Nine PowerShell/Linux installer checks passed.
+Native Windows CI passed 307 tests (22 skipped), including real PowerShell 5.1
+helper probes with spaces in paths. That test uses a disposable app fixture,
+not the user's Hermes runtime. Details are in the HERMES_MAIN_AGENT guide.
+Installer startup/dependency checks use temporary data, never the real database.
+Full native Hermes installation, live providers, physical microphone/speaker
+and actual session-store behavior still need laptop acceptance.
+No guaranteed fallback or zero downtime is claimed.

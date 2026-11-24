@@ -52,8 +52,9 @@ Updated: 25 November 2026 (Asia/Riyadh).
   models are included. Static GUI, avatar, voice/TTS, hands-free and store source
   files are byte-identical to the inspected NEXUS baseline.
 
-Native Windows PowerShell/WebView2 and installed interpreter discovery on the
-actual laptop remain unverified. No live user provider inference, subscription
+The native Windows checks below supplement this original Linux validation;
+installed interpreter discovery on the actual laptop remains unverified.
+No live user provider inference, subscription
 request, physical microphone/speaker or message sending was performed. Real
 provider access, hardware latency, interruption echo and CPU/RAM need laptop
 acceptance. Controlled providers verify switching behavior, not guaranteed live
@@ -92,6 +93,32 @@ Details: `docs/HERMES_MAIN_AGENT.md`.
   required session-store dependency is missing. A session-store interface and
   private-note fixture are used where unpublished source/content was not supplied;
   those originals are not falsely claimed as cloud-tested.
+
+### Windows PowerShell quoting fix (v3)
+
+- Checkpoint: `checkpoint/pre-hermes-ps-quoting-20261125` at `6605758`.
+- Reproduced the user's exact `%d.%d.%d` SyntaxError under Legacy native
+  argument passing. Embedded Python string quotes had been removed by the shell.
+  This preflight failure did not modify the laptop's application files.
+- All three inline Python probes now use a hash-verified helper file: version,
+  tool-schema export and temporary-data app startup. Format-3 packages require
+  that helper. No Python command string or schema JSON crosses native arguments.
+- Full Linux suite with real Hermes SDK: **323 passed, 6 skipped**. Nine
+  PowerShell 7.7/Linux installer checks passed, including Legacy mode with spaces
+  in paths and modified-helper refusal, plus the previous preservation/refusal/
+  restoration checks. Reviewed laptop source still keeps all existing controllers.
+- Native Windows CI at `4eace97ad1b20c3e468654435b989c434994322a` passed:
+  **307 passed, 22 skipped**. Its real Windows PowerShell 5.1 test first observes
+  the original quoting failure, then verifies the file-based version, quoted/
+  Unicode schema and fixture-app startup probes with paths containing spaces.
+  Existing WebView2 drag/hover/mic-control fixtures, WhatsApp local fixture,
+  disposable updater/rollback and SAPI diagnostics also passed.
+  Run: https://github.com/princemustansar-spec/NEXUS-AI-ULTRA/actions/runs/45497479290
+- Windows CI does not contain the user's Hermes runtime; its helper startup
+  check uses a disposable app fixture. Full native Hermes installation, actual
+  laptop discovery, live provider inference and physical voice latency remain
+  unverified. No guaranteed fallback or zero downtime is claimed.
+- v1/v2 delivery archives remain unchanged; use the v3 ZIP and command.
 
 ## Archived avatar notes (5 November 2026)
 
