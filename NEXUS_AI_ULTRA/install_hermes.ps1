@@ -47,20 +47,27 @@ if (-not (Test-Path -LiteralPath (Join-Path $Destination 'nexus/app.py') -PathTy
 if (-not (Test-Path -LiteralPath (Join-Path $HermesRoot 'run_agent.py') -PathType Leaf)) { throw 'Existing native Hermes installation not found. Nothing was installed.' }
 Assert-ClosedNexus
 $manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'manifest.json') -Raw | ConvertFrom-Json
-if ($manifest.format -ne 1 -or $manifest.hermes_build -ne 'caafe5389ae585ef77387a962aee05b1bcf17029') { throw 'Unsupported integration package.' }
-$entries = @($manifest.files)
-if (-not $entries.Count) { throw 'Empty integration package.' }
+if ($manifest.format -ne 2 -or $manifest.hermes_build -ne 'caafe5389ae585ef77387a962aee05b1bcf17029') { throw 'Unsupported integration package.' }
+$candidates = @($manifest.files)
+if (-not $candidates.Count) { throw 'Empty integration package.' }
+$entries = @()
 $seen = @{}
-foreach ($entry in $entries) {
+foreach ($entry in $candidates) {
     if ($seen.ContainsKey($entry.path)) { throw 'Duplicate package path.' }
     $seen[$entry.path] = $true
-    $source = Get-SafePath (Join-Path $PSScriptRoot 'payload') $entry.path
     $target = Get-SafePath $Destination $entry.path
-    if ((Get-HashOrNull $source) -ne $entry.sha256) { throw ('Package hash mismatch: ' + $entry.path) }
     $actual = Get-HashOrNull $target
-    if ($actual -ne $entry.previous_sha256) {
+    $matches = @(@($entry) + @($entry.variants) | Where-Object { $_.previous_sha256 -eq $actual })
+    if ($matches.Count -eq 0) {
         throw ('Existing file differs from the tested baseline: ' + $entry.path + '. Installation left unchanged.')
     }
+    if ($matches.Count -ne 1) { throw 'Ambiguous package baseline.' }
+    $selected = $matches[0]
+    if ($selected.operation -notin @('replace','append')) { throw 'Unsupported package operation.' }
+    if ($selected.operation -eq 'append' -and $entry.path -ne 'PROJECT_STATE.md') { throw 'Append is limited to project notes.' }
+    $source = Get-SafePath (Join-Path $PSScriptRoot 'payload') $selected.source_path
+    if ((Get-HashOrNull $source) -ne $selected.sha256) { throw ('Package hash mismatch: ' + $entry.path) }
+    $entries += [pscustomobject]@{ path=$entry.path; previous_sha256=$selected.previous_sha256; sha256=$selected.sha256; source_path=$selected.source_path; operation=$selected.operation }
 }
 $nexusCandidates = @((Join-Path $Destination '.venv/Scripts/python.exe'), (Join-Path $Destination '.venv/bin/python'))
 $nexusPython = @($nexusCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1)
@@ -109,6 +116,8 @@ try {
     Assert-ClosedNexus
     $backup = $Destination + '.hermes-backup-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,6)
     New-Item -ItemType Directory -Path $backup | Out-Null
+    $prepared = Join-Path $stage 'prepared'
+    New-Item -ItemType Directory -Path $prepared | Out-Null
     $records = @()
     foreach ($entry in $entries) {
         $target = Get-SafePath $Destination $entry.path
@@ -117,23 +126,37 @@ try {
             $saved = Get-SafePath $backup $entry.path
             New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force | Out-Null
             Copy-Item -LiteralPath $target -Destination $saved
+            if ((Get-HashOrNull $saved) -ne $entry.previous_sha256) { throw 'Source changed while saving backup. Nothing applied.' }
         }
-        $records += [pscustomobject]@{ path=$entry.path; previous_sha256=$entry.previous_sha256; sha256=$entry.sha256 }
+        $source = Get-SafePath (Join-Path $PSScriptRoot 'payload') $entry.source_path
+        $staged = Get-SafePath $prepared $entry.path
+        New-Item -ItemType Directory -Path (Split-Path -Parent $staged) -Force | Out-Null
+        if ($entry.operation -eq 'append') {
+            $oldBytes = [IO.File]::ReadAllBytes($saved)
+            $strictUtf8 = New-Object System.Text.UTF8Encoding($false,$true)
+            [void]$strictUtf8.GetString($oldBytes)
+            $addition = [IO.File]::ReadAllBytes($source)
+            [IO.File]::WriteAllBytes($staged, [byte[]]($oldBytes + $addition))
+        } else {
+            Copy-Item -LiteralPath $source -Destination $staged
+            if ((Get-HashOrNull $staged) -ne $entry.sha256) { throw 'Staged package hash mismatch.' }
+        }
+        $records += [pscustomobject]@{ path=$entry.path; previous_sha256=$entry.previous_sha256; sha256=(Get-HashOrNull $staged) }
     }
     $runtimePath = Get-SafePath $Destination 'hermes_runtime.json'
     $oldRuntimeHash = Get-HashOrNull $runtimePath
     if ($oldRuntimeHash) { Copy-Item -LiteralPath $runtimePath -Destination (Join-Path $backup 'hermes_runtime.json') }
     $runtimeText = @{ build=$manifest.hermes_build; python=$HermesPython; root=$HermesRoot; runtime_home=$HermesHome } | ConvertTo-Json
     $utf8 = New-Object System.Text.UTF8Encoding($false)
-    [IO.File]::WriteAllText((Join-Path $stage 'hermes_runtime.json'), $runtimeText, $utf8)
-    $records += [pscustomobject]@{ path='hermes_runtime.json'; previous_sha256=$oldRuntimeHash; sha256=(Get-HashOrNull (Join-Path $stage 'hermes_runtime.json')) }
+    [IO.File]::WriteAllText((Join-Path $prepared 'hermes_runtime.json'), $runtimeText, $utf8)
+    $records += [pscustomobject]@{ path='hermes_runtime.json'; previous_sha256=$oldRuntimeHash; sha256=(Get-HashOrNull (Join-Path $prepared 'hermes_runtime.json')) }
     $records | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $backup 'restore-manifest.json') -Encoding UTF8
     $applied = @()
     try {
         foreach ($record in $records) {
             $target = Get-SafePath $Destination $record.path
             if ((Get-HashOrNull $target) -ne $record.previous_sha256) { throw ('Concurrent edit retained: ' + $record.path) }
-            $source = if ($record.path -eq 'hermes_runtime.json') { Join-Path $stage 'hermes_runtime.json' } else { Get-SafePath (Join-Path $PSScriptRoot 'payload') $record.path }
+            $source = Get-SafePath $prepared $record.path
             New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
             $newPath = $target + '.nexus-hermes-' + [Guid]::NewGuid().ToString('N') + '.new'
             try {
@@ -144,7 +167,7 @@ try {
             }
             $applied += $record
         }
-        & $nexusPython -B -c 'import sys;sys.path.insert(0,sys.argv[1]);from nexus.hermes_agent import HermesAgent;from pathlib import Path;a=HermesAgent(sys.argv[1],Path(sys.argv[1]),None,None,lambda:False);a.config();print("NEXUS Hermes configuration verified")' $Destination
+        & $nexusPython -B -c 'import sys,os;sys.path.insert(0,sys.argv[1]);os.environ["NEXUS_DATA_DIR"]=sys.argv[2];import nexus.app as app;app.hermes.config();app.state();print("NEXUS Hermes configuration verified; app startup checked with isolated temporary data")' $Destination (Join-Path $stage 'postflight-data')
         if ($LASTEXITCODE -ne 0) { throw 'NEXUS post-install import/configuration check failed.' }
     } catch {
         $installFailure = $_

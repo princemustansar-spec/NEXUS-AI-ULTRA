@@ -1,12 +1,13 @@
 # NEXUS AI ULTRA — project state
 
-Updated: 24 November 2026 (Asia/Riyadh).
+Updated: 25 November 2026 (Asia/Riyadh).
 
-## Hermes main-agent integration (local work; not pushed)
+## Hermes main-agent integration (delivery branch; not merged)
 
 - NEXUS baseline: `b630568caa735e756f96b22db07a354f041db88b`.
 - Local recoverable checkpoint: `checkpoint/pre-hermes-20261124`.
-- Local working branch: `feature/hermes-main-20261124`. No Git push or merge.
+- Delivery branch: `feature/hermes-main-20261124`. Source/package publication
+  was authorized by the user; the integration is not merged into main.
 - Existing native Hermes v0.23.3 / Python 3.14.9 is reused, pinned to supplied
   build `caafe5389ae585ef77387a962aee05b1bcf17029`.
 - GUI chat and auto voice enter the real Hermes AIAgent loop. Exact legacy
@@ -58,6 +59,39 @@ provider access, hardware latency, interruption echo and CPU/RAM need laptop
 acceptance. Controlled providers verify switching behavior, not guaranteed live
 service availability. No zero-downtime or guaranteed-fallback claim is made.
 Details: `docs/HERMES_MAIN_AGENT.md`.
+
+### Reviewed laptop compatibility update
+
+- Local checkpoint before this update: `checkpoint/pre-laptop-app-compat-20261125`.
+- The original package correctly refused laptop app SHA-256
+  `7931f0dbef329bcddc925547e1a30a47915fb9d9aaae26640bf1dde2f9a05e1d`.
+  The supplied source has New Chat/session APIs and Male/Female voice controls.
+- A conflict-free reviewed merge is stored under `compatibility/laptop-7931f0/`.
+  Its payload SHA-256 is
+  `971e16a30cb414a67afbd10a82c137546810bb1c9f5e540719ae3d1bb842d601`.
+  Existing controllers other than chat, lifespan and safety are unchanged.
+- The supplied account_providers.py is byte-identical to the baseline and is
+  left untouched. User-provided hashes confirm the existing providers.py and
+  .gitignore match the original tested baseline.
+- A reviewed different project-state hash is accepted only for append mode.
+  The original private notes are not uploaded or replaced. All code baselines
+  still require exact recognized hashes; there is no force option.
+- Format-2 installer selects the matching stock/laptop payload, backs up original
+  bytes, stages appended notes, and checks app import/state with temporary data.
+  Missing dependencies cause restoration instead of a broken successful install.
+- The user session-store and voice source files are not modified. Session API
+  delegation is tested with collaborators; their unpublished internals and native
+  Windows behavior require laptop acceptance.
+- Updated full suite with the real Hermes SDK: **321 passed, 5 skipped**. New
+  compatibility tests verify all untouched uploaded controllers and run the
+  reviewed app through the real Hermes bridge, including stale-chat rejection,
+  session API delegation and saved voice settings.
+- Seven PowerShell 7.7/Linux checks passed: stock install, exact laptop app
+  selection with retained notes, unchanged source/data/voice-store dependencies,
+  source refusal, failure restoration, traversal refusal and restoration when a
+  required session-store dependency is missing. A session-store interface and
+  private-note fixture are used where unpublished source/content was not supplied;
+  those originals are not falsely claimed as cloud-tested.
 
 ## Archived avatar notes (5 November 2026)
 

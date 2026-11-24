@@ -67,16 +67,46 @@ Hermes build's internal requirement; this neither allocates a local model nor
 expands any actual provider window. NEXUS retains its existing Ollama 4,096-token
 setting. A provider can still reject a long context, and all providers can fail.
 
+## Reviewed laptop compatibility (v2)
+
+The initial installer refused the supplied laptop's app.py because it genuinely
+differs from the inspected main-branch baseline; the difference was not CRLF or
+encoding. The uploaded file is 32,733 bytes, SHA-256
+`7931f0dbef329bcddc925547e1a30a47915fb9d9aaae26640bf1dde2f9a05e1d`.
+It adds saved/new chat sessions, active-chat protection and Male/Female online
+voice controls. A reviewed three-way merge adds Hermes to this exact app while
+retaining those controllers unchanged. Both stock and reviewed laptop apps are
+supported; unrecognized app hashes still stop the installation.
+
+The supplied account_providers.py matches the original source and is not changed.
+The user separately confirmed that providers.py and .gitignore match the tested
+baseline. Their existing session-store and voice implementation files are not
+in the payload. API delegation is tested with session-store collaborators; their
+unpublished store internals are not claimed as tested in the cloud.
+
+The user also supplied the hash of a different PROJECT_STATE.md, without sharing
+its contents. Format-2 packages append a small integration note to either reviewed
+state baseline, preserving the document's original bytes. Backup/restore and
+concurrent-change checks use the original raw hashes. The ZIP does not contain
+that private document. Only this documentation path permits append operations.
+
+After applying files, the installer imports the actual installed app and checks
+its state against a temporary data directory. This checks dependencies such as
+chat_sessions without opening the real user database, starting the desktop,
+recording audio or running provider probes. Startup failure restores the applied
+files and notes. No force/ignore-baseline switch is introduced.
+
 ## Installation
 
-Save **NEXUS-Hermes-Integration.zip** to Downloads. Close NEXUS completely and run
+Save **NEXUS-Hermes-Integration-v2.zip** to Downloads. Close NEXUS completely and run
 the provided PowerShell command to extract it into a fresh temporary folder and
 invoke **Install-NexusHermes.ps1** against the existing installation.
 
 The installer verifies package hashes and the prior hashes of every file it
-will change, probes the real installed Hermes API, saves a source backup, applies
-only the listed source/doc files and the runtime descriptor, and checks NEXUS
-imports. Unknown source changes cause a refusal before patching. A failed
+will change, selects only a reviewed matching app variant, probes the real
+installed Hermes API, saves a source backup, applies only the listed source/doc
+files and runtime descriptor, and checks app startup against temporary data.
+Unknown source changes cause a refusal before patching. A failed
 application attempts restoration of its own changes without deleting concurrent
 edits. SQLite, credentials, user settings, avatar assets and other projects are
 outside the payload. No model, package, account login or API request is performed
@@ -87,6 +117,14 @@ Nonstandard installations can supply **-Destination**, **-HermesRoot**,
 by the user. No WSL installation is created or required.
 
 ## Validation and limits
+
+The v2 full suite passed **321 tests with 5 skips** using the real pinned Hermes
+runtime. Its reviewed laptop app receives real bridge responses; session API
+collaborators verify delegation without claiming to test the user's unpublished
+store implementation. Seven PowerShell/Linux checks cover both app variants,
+original note/data preservation, refusal of unknown code, startup dependency
+failure recovery and unsafe-path refusal. The private-note fixture uses its own
+reviewed hash because the user's actual document was never uploaded.
 
 Focused acceptance runs the actual pinned Hermes source and Python 3.14.9,
 the production NEXUS router and controlled HTTP provider endpoints. It is not

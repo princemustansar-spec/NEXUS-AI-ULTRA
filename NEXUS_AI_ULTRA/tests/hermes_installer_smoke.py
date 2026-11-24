@@ -18,12 +18,12 @@ import uuid
 BASE = Path(__file__).resolve().parents[1]
 REPO = BASE.parent
 ROOT = Path('/workspace/hermes-installer-acceptance') / uuid.uuid4().hex
-ZIP = Path('/workspace/artifacts/NEXUS-Hermes-Integration.zip')
+ZIP = Path('/workspace/artifacts/NEXUS-Hermes-Integration-v2.zip')
 PWSH = Path('/workspace/tooling/powershell/pwsh')
 HERMES_ROOT = Path(os.environ['HERMES_TEST_ROOT'])
 HERMES_HOME = Path(os.environ['HERMES_TEST_HOME'])
 HERMES_PYTHON = Path(os.environ['HERMES_TEST_PYTHON'])
-COMMAND = r"$z=Join-Path $env:USERPROFILE 'Downloads\NEXUS-Hermes-Integration.zip'; $t=Join-Path ([IO.Path]::GetTempPath()) ('nexus-hermes-'+[Guid]::NewGuid().ToString('N')); Expand-Archive -LiteralPath $z -DestinationPath $t; & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $t 'Install-NexusHermes.ps1') -Destination (Join-Path $env:USERPROFILE 'NEXUS_AI_ULTRA')"
+COMMAND = r"$z=Join-Path $env:USERPROFILE 'Downloads\NEXUS-Hermes-Integration-v2.zip'; $t=Join-Path ([IO.Path]::GetTempPath()) ('nexus-hermes-'+[Guid]::NewGuid().ToString('N')); Expand-Archive -LiteralPath $z -DestinationPath $t; & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $t 'Install-NexusHermes.ps1') -Destination (Join-Path $env:USERPROFILE 'NEXUS_AI_ULTRA')"
 
 
 def digest(path):
@@ -75,6 +75,27 @@ def unchanged_external(external):
     assert all(digest(Path(p))==value for p,value in external.items())
 
 
+def laptop_fixture(folder,user,dest,before):
+    shutil.copyfile(BASE/'compatibility/laptop-7931f0/baseline_app.py',dest/'nexus/app.py')
+    # Model the EXISTING dependency interface for startup. This is not installed
+    # into the real product; the user's session-store code must remain untouched.
+    store=dest/'nexus/store.py'
+    store.write_text(store.read_text()+"\nStore.chat_sessions = lambda self: [{'id': self.get('active_chat','legacy'), 'title': 'Fixture saved chat'}]\n")
+    notes=b'# Private laptop notes\nExisting chat and voice updates must stay.\n'
+    (dest/'PROJECT_STATE.md').write_bytes(notes)
+    for name in ['nexus/app.py','nexus/store.py','PROJECT_STATE.md']:
+        before[name]=digest(dest/name)
+    extracted=folder/'package'
+    with zipfile.ZipFile(ZIP) as archive:archive.extractall(extracted)
+    manifest=json.loads((extracted/'manifest.json').read_text())
+    state=next(e for e in manifest['files'] if e['path']=='PROJECT_STATE.md')
+    # Actual user notes were not uploaded. The same guarded append operation is
+    # exercised with a reviewed fixture hash, never with a force/ignore option.
+    state['variants'][0]['previous_sha256']=digest(dest/'PROJECT_STATE.md')
+    (extracted/'manifest.json').write_text(json.dumps(manifest))
+    return extracted,notes
+
+
 def main():
     ROOT.mkdir(parents=True,exist_ok=True)
     results={}
@@ -92,8 +113,37 @@ def main():
     unchanged_external(external)
     backup=next(user.glob('NEXUS_AI_ULTRA.hermes-backup-*'))
     for name in changed & set(before):assert digest(backup/name)==before[name]
+    assert (dest/'PROJECT_STATE.md').read_bytes().startswith((backup/'PROJECT_STATE.md').read_bytes())
     results['exact_delivery_command_and_default_discovery']='passed'
     results['source_backup_and_unrelated_data_preservation']='passed'
+
+    folder,user,dest,before,external,env=installation('reviewed-laptop')
+    extracted,notes=laptop_fixture(folder,user,dest,before)
+    command="& '"+str(extracted/'Install-NexusHermes.ps1')+"' -Destination '"+str(dest)+"'"
+    result=run_ps(command,env)
+    assert result.returncode==0,result.stdout+'\n'+result.stderr
+    assert digest(dest/'nexus/app.py')==digest(BASE/'compatibility/laptop-7931f0/app.py')
+    assert digest(dest/'nexus/store.py')==before['nexus/store.py']
+    assert (dest/'PROJECT_STATE.md').read_bytes().startswith(notes)
+    backup=next(user.glob('NEXUS_AI_ULTRA.hermes-backup-*'))
+    assert digest(backup/'nexus/app.py')==before['nexus/app.py']
+    assert (backup/'PROJECT_STATE.md').read_bytes()==notes
+    unchanged_external(external)
+    results['reviewed_laptop_variant_and_note_preservation']='passed'
+
+    folder,user,dest,before,external,env=installation('laptop-missing-dependency')
+    extracted,notes=laptop_fixture(folder,user,dest,before)
+    # An incomplete local update must be detected by app startup, not delivered
+    # as an apparently successful install with a broken dashboard.
+    original_store=subprocess.check_output(['git','show','b630568caa735e756f96b22db07a354f041db88b:NEXUS_AI_ULTRA/nexus/store.py'],cwd=REPO)
+    (dest/'nexus/store.py').write_bytes(original_store)
+    before['nexus/store.py']=digest(dest/'nexus/store.py')
+    result=run_ps("& '"+str(extracted/'Install-NexusHermes.ps1')+"' -Destination '"+str(dest)+"'",env)
+    assert result.returncode!=0 and 'post-install' in result.stderr
+    for name,value in before.items():assert digest(dest/name)==value,name
+    assert not (dest/'hermes_runtime.json').exists()
+    unchanged_external(external)
+    results['missing_session_store_dependency_restores_laptop']='passed'
 
     folder,user,dest,before,external,env=installation('modified-source')
     (dest/'nexus/app.py').write_text((dest/'nexus/app.py').read_text()+'\n# private local edit\n')
@@ -133,8 +183,8 @@ def main():
     assert not (user/'outside.py').exists();unchanged_external(external)
     results['unsafe_package_path_rejected']='passed'
     receipt=dict(platform='PowerShell 7.7.0 on Linux; native Windows not exercised',checks=results)
-    Path('/workspace/artifacts/hermes-installer-validation.json').write_text(json.dumps(receipt,indent=2))
-    Path('/workspace/artifacts/NEXUS-Hermes-Install-Command.ps1').write_text(COMMAND+'\n')
+    Path('/workspace/artifacts/hermes-installer-validation-v2.json').write_text(json.dumps(receipt,indent=2))
+    Path('/workspace/artifacts/NEXUS-Hermes-Install-Command-v2.ps1').write_text(COMMAND+'\n')
     print(json.dumps(receipt,indent=2))
 
 
